@@ -115,10 +115,11 @@ def cmd_dash(fullscreen: bool = False) -> None:
     import os
     import shutil
 
-    if fullscreen or not shutil.which("tmux"):
-        if not fullscreen and not shutil.which("tmux"):
-            console = Console()
-            console.print(
+    has_tmux = bool(shutil.which("tmux"))
+
+    if fullscreen or not has_tmux:
+        if not has_tmux:
+            Console().print(
                 "[dim]Tip: Install tmux for sidebar mode: "
                 "[bold]brew install tmux[/bold][/dim]\n"
             )
@@ -127,7 +128,7 @@ def cmd_dash(fullscreen: bool = False) -> None:
         app.run()
         return
 
-    launch_script = Path(__file__).parent.parent / "scripts" / "launch.sh"
+    launch_script = Path(__file__).parent / "launch.sh"
     if not launch_script.exists():
         from .dashboard.app import DashboardApp
         app = DashboardApp()
@@ -149,5 +150,5 @@ def main() -> None:
         cmd_dash(fullscreen=fullscreen)
     else:
         print(f"Unknown command: {args[0]}")
-        print("Usage: ct [status|install-hooks|dash]")
+        print("Usage: ct [status|install-hooks|dash [--fullscreen]]")
         sys.exit(1)

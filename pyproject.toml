@@ -12,6 +12,12 @@ dependencies = [
 [project.scripts]
 ct = "claude_toolkits.cli:main"
 
+[tool.hatch.build.targets.wheel]
+packages = ["claude_toolkits"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"claude_toolkits/launch.sh" = "claude_toolkits/launch.sh"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
