@@ -111,6 +111,13 @@ def cmd_install_hooks() -> None:
     console.print("\n[dim]New Claude sessions will now report state in real-time.[/dim]")
 
 
+def cmd_dash() -> None:
+    from .dashboard.app import DashboardApp
+
+    app = DashboardApp()
+    app.run()
+
+
 def main() -> None:
     args = sys.argv[1:]
 
@@ -119,7 +126,7 @@ def main() -> None:
     elif args[0] == "install-hooks":
         cmd_install_hooks()
     elif args[0] == "dash":
-        print("Dashboard TUI not yet implemented (Phase 2). Use 'ct status' for now.")
+        cmd_dash()
     else:
         print(f"Unknown command: {args[0]}")
         print("Usage: ct [status|install-hooks|dash]")
