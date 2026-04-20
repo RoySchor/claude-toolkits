@@ -1,0 +1,244 @@
+from __future__ import annotations
+
+import json
+import os
+from datetime import datetime, timezone
+from pathlib import Path
+
+import psutil
+
+from .cache import TranscriptCache, has_pending_tool_use
+from .models import STALE_THRESHOLD_HOURS, Session, SessionState
+
+CLAUDE_DIR = Path.home() / ".claude"
+SESSIONS_DIR = CLAUDE_DIR / "sessions"
+PROJECTS_DIR = CLAUDE_DIR / "projects"
+STATE_DIR = Path.home() / ".claude-toolkits" / "state"
+
+
+def is_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        proc = psutil.Process(pid)
+        cmdline = proc.cmdline()
+        if cmdline and "claude" in cmdline[0].lower():
+            return True
+        exe = proc.exe()
+        return "claude" in exe.lower()
+    except (ProcessLookupError, psutil.NoSuchProcess, psutil.AccessDenied, IndexError):
+        return False
+
+
+def build_transcript_index() -> dict[str, Path]:
+    index: dict[str, Path] = {}
+    if not PROJECTS_DIR.exists():
+        return index
+    for path in PROJECTS_DIR.rglob("*.jsonl"):
+        if not path.name.startswith("agent-"):
+            index[path.stem] = path
+    return index
+
+
+def load_session_files() -> list[dict]:
+    sessions = []
+    if not SESSIONS_DIR.exists():
+        return sessions
+    for f in SESSIONS_DIR.iterdir():
+        if f.suffix == ".json":
+            try:
+                data = json.loads(f.read_text())
+                sessions.append(data)
+            except (json.JSONDecodeError, OSError):
+                continue
+    return sessions
+
+
+def load_hook_states() -> dict[str, dict]:
+    states: dict[str, dict] = {}
+    if not STATE_DIR.exists():
+        return states
+    for f in STATE_DIR.iterdir():
+        if f.suffix == ".json":
+            try:
+                data = json.loads(f.read_text())
+                sid = data.get("session_id", f.stem)
+                states[sid] = data
+            except (json.JSONDecodeError, OSError):
+                continue
+    return states
+
+
+class SessionScanner:
+    def __init__(self) -> None:
+        self._transcript_index: dict[str, Path] = {}
+        self._caches: dict[str, TranscriptCache] = {}
+        self._prev_mtimes: dict[str, float] = {}
+
+    def scan(self) -> list[Session]:
+        self._transcript_index = build_transcript_index()
+        session_files = load_session_files()
+        hook_states = load_hook_states()
+
+        sessions: list[Session] = []
+        seen_ids: set[str] = set()
+
+        for raw in session_files:
+            sid = raw.get("sessionId", "")
+            if not sid:
+                continue
+            seen_ids.add(sid)
+
+            pid = raw.get("pid")
+            alive = is_alive(pid) if pid else False
+
+            session = Session(
+                session_id=sid,
+                pid=pid,
+                cwd=raw.get("cwd", ""),
+                name=raw.get("name"),
+                started_at=self._parse_started_at(raw.get("startedAt")),
+                transcript_path=self._transcript_index.get(sid),
+            )
+
+            if not alive:
+                session.state = SessionState.DEAD
+                sessions.append(session)
+                continue
+
+            if sid in hook_states:
+                self._apply_hook_state(session, hook_states[sid])
+            else:
+                self._apply_fallback_state(session)
+
+            sessions.append(session)
+
+        for sid, state_data in hook_states.items():
+            if sid not in seen_ids:
+                session = Session(
+                    session_id=sid,
+                    cwd=state_data.get("cwd", ""),
+                    source="hook",
+                )
+                self._apply_hook_state(session, state_data)
+                sessions.append(session)
+
+        sessions.sort(key=lambda s: (self._state_sort_key(s.state), s.label.lower()))
+        return sessions
+
+    def _apply_hook_state(self, session: Session, state_data: dict) -> None:
+        session.source = "hook"
+        raw_state = state_data.get("state", "idle")
+        ts_str = state_data.get("timestamp")
+
+        if ts_str:
+            try:
+                session.last_activity = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+            except ValueError:
+                pass
+
+        if raw_state == "cooking":
+            session.state = SessionState.COOKING
+        elif raw_state == "idle":
+            if session.transcript_path and has_pending_tool_use(session.transcript_path):
+                session.state = SessionState.NEEDS_YOU
+            elif session.age_hours is not None and session.age_hours > STALE_THRESHOLD_HOURS:
+                session.state = SessionState.STALE
+            else:
+                session.state = SessionState.RECENTLY_ACTIVE
+        else:
+            session.state = SessionState.RECENTLY_ACTIVE
+
+        self._load_labels(session)
+
+    def _apply_fallback_state(self, session: Session) -> None:
+        session.source = "fallback"
+        tp = session.transcript_path
+        if tp is None:
+            session.state = SessionState.STALE
+            return
+
+        sid = session.session_id
+        if sid not in self._caches:
+            cache = TranscriptCache(path=tp)
+            cache.initial_load()
+            self._caches[sid] = cache
+        else:
+            cache = self._caches[sid]
+            if cache.path != tp:
+                cache = TranscriptCache(path=tp)
+                cache.initial_load()
+                self._caches[sid] = cache
+
+        current_mtime = self._get_mtime(tp)
+        prev_mtime = self._prev_mtimes.get(sid, 0.0)
+
+        if prev_mtime > 0 and current_mtime > prev_mtime:
+            session.state = SessionState.COOKING
+        elif cache.last_user_assistant:
+            ts_str = cache.last_user_assistant.get("timestamp", "")
+            if ts_str:
+                try:
+                    last_ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                    session.last_activity = last_ts
+                    hours = (datetime.now(timezone.utc) - last_ts).total_seconds() / 3600
+                    if hours > STALE_THRESHOLD_HOURS:
+                        session.state = SessionState.STALE
+                    elif has_pending_tool_use(tp):
+                        session.state = SessionState.NEEDS_YOU
+                    else:
+                        session.state = SessionState.RECENTLY_ACTIVE
+                except ValueError:
+                    session.state = SessionState.STALE
+            else:
+                session.state = SessionState.STALE
+        else:
+            session.state = SessionState.STALE
+
+        self._prev_mtimes[sid] = current_mtime
+
+        session.custom_title = cache.custom_title
+        session.away_summary = cache.away_summary
+
+    def _load_labels(self, session: Session) -> None:
+        tp = session.transcript_path
+        if tp is None:
+            return
+        sid = session.session_id
+        if sid not in self._caches:
+            cache = TranscriptCache(path=tp)
+            cache.initial_load()
+            self._caches[sid] = cache
+        cache = self._caches[sid]
+        session.custom_title = cache.custom_title
+        session.away_summary = cache.away_summary
+
+    @staticmethod
+    def _get_mtime(path: Path) -> float:
+        try:
+            return os.stat(path).st_mtime
+        except OSError:
+            return 0.0
+
+    @staticmethod
+    def _parse_started_at(value) -> datetime | None:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return datetime.fromtimestamp(value / 1000, tz=timezone.utc)
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError:
+                return None
+        return None
+
+    @staticmethod
+    def _state_sort_key(state: SessionState) -> int:
+        order = {
+            SessionState.COOKING: 0,
+            SessionState.NEEDS_YOU: 1,
+            SessionState.RECENTLY_ACTIVE: 2,
+            SessionState.STALE: 3,
+            SessionState.DEAD: 4,
+        }
+        return order.get(state, 5)
