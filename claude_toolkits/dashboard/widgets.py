@@ -1,19 +1,18 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.containers import Vertical, VerticalScroll
+from textual.containers import VerticalScroll
 from textual.reactive import reactive
-from textual.widget import Widget
 from textual.widgets import Label, Static
 
 from .models import Session, SessionState
 
 STATE_ICONS = {
-    SessionState.COOKING: "🔥",
-    SessionState.NEEDS_YOU: "🔔",
-    SessionState.RECENTLY_ACTIVE: "✅",
-    SessionState.STALE: "💤",
-    SessionState.DEAD: "💀",
+    SessionState.COOKING: "\U0001f525",
+    SessionState.NEEDS_YOU: "\U0001f514",
+    SessionState.RECENTLY_ACTIVE: "\u2705",
+    SessionState.STALE: "\U0001f4a4",
+    SessionState.DEAD: "\U0001f480",
 }
 
 STATE_HEADERS = {
@@ -64,7 +63,7 @@ class SessionItem(Static):
             else:
                 age_str = f" [dim]{hours / 24:.0f}d[/dim]"
 
-        marker = "▸ " if self.has_class("--selected") else "  "
+        marker = "\u25b8 " if self.has_class("--selected") else "  "
         yield Label(f"{marker}{label}{age_str}")
 
 
@@ -116,6 +115,7 @@ class SessionList(VerticalScroll):
             SessionState.NEEDS_YOU,
             SessionState.RECENTLY_ACTIVE,
             SessionState.STALE,
+            SessionState.DEAD,
         ]
 
         flat_idx = 0
@@ -136,8 +136,16 @@ class StatusBar(Static):
     poll_interval: reactive[float] = reactive(5.0)
     session_count: reactive[int] = reactive(0)
     paused: reactive[bool] = reactive(False)
+    dead_count: reactive[int] = reactive(0)
 
     def render(self) -> str:
         if self.paused:
-            return f"⏸  Paused │ {self.session_count} sessions │ [r]esume [q]uit"
-        return f"⏸  {self.poll_interval:.0f}s │ {self.session_count} sessions │ [r]efresh [q]uit"
+            return f"\u23f8  Paused \u2502 {self.session_count} sessions \u2502 [r]esume [q]uit"
+        parts = [
+            f"\u25b6 {self.poll_interval:.0f}s",
+            f"{self.session_count} sessions",
+        ]
+        if self.dead_count > 0:
+            parts.append(f"{self.dead_count} dead")
+        parts.append("[r]efresh [q]uit")
+        return " \u2502 ".join(parts)

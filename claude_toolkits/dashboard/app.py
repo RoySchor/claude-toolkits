@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.screen import ModalScreen
+from textual.timer import Timer
 from textual.widgets import Footer, Header, Label, Static
 
 from .models import Session, SessionState
@@ -99,14 +99,14 @@ class DashboardApp(App[None]):
 
     TITLE = "Claude Sessions"
 
-    def __init__(self, standalone: bool = False) -> None:
+    def __init__(self) -> None:
         self._scanner = SessionScanner()
         self._sessions: list[Session] = []
         self._selected_idx: int = 0
         self._poll_interval: float = 5.0
         self._paused: bool = False
         self._all_stale_since: datetime | None = None
-        self._poll_task: asyncio.Task | None = None
+        self._poll_task: Timer | None = None
         super().__init__()
 
     def compose(self) -> ComposeResult:
@@ -117,7 +117,6 @@ class DashboardApp(App[None]):
 
     def on_mount(self) -> None:
         self._do_scan()
-        self._poll_task = self.set_interval(self._poll_interval, self._poll_tick)
 
     def _do_scan(self) -> None:
         self._sessions = self._scanner.scan()
@@ -133,11 +132,13 @@ class DashboardApp(App[None]):
         status_bar.session_count = len(self._sessions)
         status_bar.poll_interval = self._poll_interval
         status_bar.paused = self._paused
+        status_bar.dead_count = sum(1 for s in self._sessions if s.state == SessionState.DEAD)
 
         self._adapt_polling()
 
     def _adapt_polling(self) -> None:
         if not self._sessions:
+            self._set_timer(5.0)
             return
 
         has_cooking = any(s.state == SessionState.COOKING for s in self._sessions)
@@ -154,8 +155,7 @@ class DashboardApp(App[None]):
                 stale_hours = (datetime.now(timezone.utc) - self._all_stale_since).total_seconds() / 3600
                 if stale_hours > 2:
                     self._paused = True
-                    if self._poll_task:
-                        self._poll_task.stop()
+                    self._stop_timer()
                     status_bar = self.query_one(StatusBar)
                     status_bar.paused = True
                     return
@@ -163,21 +163,26 @@ class DashboardApp(App[None]):
             new_interval = 5.0
             self._all_stale_since = None
 
-        if new_interval != self._poll_interval:
-            self._poll_interval = new_interval
-            if self._poll_task:
-                self._poll_task.stop()
-            self._poll_task = self.set_interval(self._poll_interval, self._poll_tick)
+        self._set_timer(new_interval)
+
+    def _set_timer(self, interval: float) -> None:
+        if interval == self._poll_interval and self._poll_task is not None:
+            return
+        self._poll_interval = interval
+        self._stop_timer()
+        self._poll_task = self.set_interval(interval, self._poll_tick)
+
+    def _stop_timer(self) -> None:
+        if self._poll_task is not None:
+            self._poll_task.stop()
+            self._poll_task = None
 
     def _poll_tick(self) -> None:
         self._do_scan()
 
     def action_refresh(self) -> None:
-        if self._paused:
-            self._paused = False
-            self._all_stale_since = None
-            self._poll_interval = 5.0
-            self._poll_task = self.set_interval(self._poll_interval, self._poll_tick)
+        self._paused = False
+        self._all_stale_since = None
         self._do_scan()
 
     def action_cursor_down(self) -> None:
