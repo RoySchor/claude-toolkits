@@ -96,12 +96,14 @@ class TranscriptCache:
                                 self.away_summary = content[:60]
                     elif entry_type == "custom-title":
                         if self.custom_title is None:
-                            self.custom_title = entry.get("title", "")
+                            self.custom_title = entry.get("customTitle", "")
 
-                    if self.last_user_assistant is not None:
-                        break
-
-                if self.last_user_assistant is not None:
+                all_found = (
+                    self.last_user_assistant is not None
+                    and self.custom_title is not None
+                    and self.away_summary is not None
+                )
+                if all_found:
                     break
 
                 if offset == 0:
@@ -127,27 +129,29 @@ def has_pending_tool_use(transcript_path: Path) -> bool:
 
     lines = chunk.strip().split("\n")
 
-    last_assistant = None
-    has_tool_result = False
-
-    for line in reversed(lines):
+    entries = []
+    for line in lines:
         line = line.strip()
         if not line:
             continue
         try:
-            entry = json.loads(line)
+            entries.append(json.loads(line))
         except json.JSONDecodeError:
             continue
 
-        entry_type = entry.get("type")
-        if entry_type == "assistant" and last_assistant is None:
-            last_assistant = entry
-        elif entry_type == "user":
-            break
-
-    if last_assistant is None:
+    if not entries:
         return False
 
+    last_assistant_idx = None
+    for i in range(len(entries) - 1, -1, -1):
+        if entries[i].get("type") == "assistant":
+            last_assistant_idx = i
+            break
+
+    if last_assistant_idx is None:
+        return False
+
+    last_assistant = entries[last_assistant_idx]
     message = last_assistant.get("message", {})
     content = message.get("content", [])
     if not isinstance(content, list):
@@ -161,21 +165,13 @@ def has_pending_tool_use(transcript_path: Path) -> bool:
     if not has_tool_use:
         return False
 
-    for line in reversed(lines):
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            entry = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+    for entry in entries[last_assistant_idx + 1:]:
         if entry.get("type") == "user":
-            message = entry.get("message", {})
-            content = message.get("content", [])
-            if isinstance(content, list):
-                for block in content:
+            msg = entry.get("message", {})
+            c = msg.get("content", [])
+            if isinstance(c, list):
+                for block in c:
                     if isinstance(block, dict) and block.get("type") == "tool_result":
                         return False
-            break
 
     return True
