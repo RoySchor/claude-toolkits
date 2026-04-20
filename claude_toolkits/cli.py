@@ -111,11 +111,31 @@ def cmd_install_hooks() -> None:
     console.print("\n[dim]New Claude sessions will now report state in real-time.[/dim]")
 
 
-def cmd_dash() -> None:
-    from .dashboard.app import DashboardApp
+def cmd_dash(fullscreen: bool = False) -> None:
+    import os
+    import shutil
 
-    app = DashboardApp()
-    app.run()
+    has_tmux = bool(shutil.which("tmux"))
+
+    if fullscreen or not has_tmux:
+        if not has_tmux:
+            Console().print(
+                "[dim]Tip: Install tmux for sidebar mode: "
+                "[bold]brew install tmux[/bold][/dim]\n"
+            )
+        from .dashboard.app import DashboardApp
+        app = DashboardApp()
+        app.run()
+        return
+
+    launch_script = Path(__file__).parent / "launch.sh"
+    if not launch_script.exists():
+        from .dashboard.app import DashboardApp
+        app = DashboardApp()
+        app.run()
+        return
+
+    os.execvp("bash", ["bash", str(launch_script)])
 
 
 def main() -> None:
@@ -126,8 +146,9 @@ def main() -> None:
     elif args[0] == "install-hooks":
         cmd_install_hooks()
     elif args[0] == "dash":
-        cmd_dash()
+        fullscreen = "--fullscreen" in args
+        cmd_dash(fullscreen=fullscreen)
     else:
         print(f"Unknown command: {args[0]}")
-        print("Usage: ct [status|install-hooks|dash]")
+        print("Usage: ct [status|install-hooks|dash [--fullscreen]]")
         sys.exit(1)
