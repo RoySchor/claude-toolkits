@@ -58,8 +58,8 @@ tmux bind-key Space run-shell '
     fi
 '
 
-# Ctrl+B Tab = switch focus between panes
-tmux bind-key Tab select-pane -t "{next}"
+# Ctrl+B h = switch focus between panes
+tmux bind-key h select-pane -t "{next}"
 
 # Focus the right pane (shell) and attach
 tmux select-pane -t "${SESSION_NAME}:0.1"

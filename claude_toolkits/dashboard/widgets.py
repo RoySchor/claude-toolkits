@@ -147,7 +147,7 @@ class StatusBar(Static):
 
     def render(self) -> str:
         if self.paused:
-            return f"\u23f8  Paused \u2502 {self.session_count} sessions \u2502 [r]esume [q]uit \u2502 [dim]ctrl+b+tab: Exit Dashboard[/dim]"
+            return f"\u23f8  Paused \u2502 {self.session_count} sessions \u2502 [r]esume [q]uit \u2502 [dim]ctrl+b h: Exit Dashboard[/dim]"
         parts = [
             f"\u25b6 {self.poll_interval:.0f}s",
             f"{self.session_count} sessions",
@@ -155,5 +155,5 @@ class StatusBar(Static):
         if self.dead_count > 0:
             parts.append(f"{self.dead_count} dead")
         parts.append("[r]efresh [q]uit")
-        parts.append("[dim]ctrl+b+tab: Exit Dashboard[/dim]")
+        parts.append("[dim]ctrl+b h: Exit Dashboard[/dim]")
         return " \u2502 ".join(parts)
