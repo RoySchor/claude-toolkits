@@ -10,7 +10,7 @@ from .models import Session, SessionState
 STATE_ICONS = {
     SessionState.COOKING: "\U0001f525",
     SessionState.NEEDS_YOU: "\U0001f514",
-    SessionState.RECENTLY_ACTIVE: "\u2705",
+    SessionState.RECENTLY_ACTIVE: "✅",
     SessionState.STALE: "\U0001f4a4",
     SessionState.DEAD: "\U0001f480",
 }
@@ -63,7 +63,7 @@ class SessionItem(Static):
             else:
                 age_str = f" [dim]{hours / 24:.0f}d[/dim]"
 
-        marker = "\u25b8 " if self.has_class("--selected") else "  "
+        marker = "▸ " if self.has_class("--selected") else "  "
         yield Label(f"{marker}{label}{age_str}")
 
         summary = self._get_summary()
@@ -146,14 +146,16 @@ class StatusBar(Static):
     dead_count: reactive[int] = reactive(0)
 
     def render(self) -> str:
+        copy_hint = "[dim]Cmd+Opt+drag: copy text[/dim]"
         if self.paused:
-            return f"\u23f8  Paused \u2502 {self.session_count} sessions \u2502 [r]esume [q]uit \u2502 [dim]ctrl+b h: Exit Dashboard[/dim]"
+            line1 = f"⏸  Paused │ {self.session_count} sessions │ [r]esume [q]uit │ [dim]ctrl+b h: Exit Dashboard[/dim]"
+            return f"{line1}\n{copy_hint}"
         parts = [
-            f"\u25b6 {self.poll_interval:.0f}s",
+            f"▶ {self.poll_interval:.0f}s",
             f"{self.session_count} sessions",
         ]
         if self.dead_count > 0:
             parts.append(f"{self.dead_count} dead")
         parts.append("[r]efresh [q]uit")
         parts.append("[dim]ctrl+b h: Exit Dashboard[/dim]")
-        return " \u2502 ".join(parts)
+        return " │ ".join(parts) + f"\n{copy_hint}"
