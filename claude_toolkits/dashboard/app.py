@@ -98,7 +98,7 @@ class DashboardApp(App[None]):
         Binding("r", "refresh", "Refresh"),
         Binding("enter", "open_session", "Open"),
         Binding("d", "detail", "Detail"),
-        Binding("f9", "exit_hint", "Exit Dashboard", show=True, key_display="^B Tab"),
+        Binding("f9", "exit_hint", "Exit Dashboard", show=True, key_display="ctrl+b+tab"),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
         Binding("down", "cursor_down", "Down", show=False),
