@@ -35,7 +35,7 @@ STATE_STYLES = {
 class SessionItem(Static):
     DEFAULT_CSS = """
     SessionItem {
-        height: 1;
+        height: auto;
     }
     SessionItem.--selected {
         background: $accent 30%;
@@ -66,19 +66,31 @@ class SessionItem(Static):
         marker = "\u25b8 " if self.has_class("--selected") else "  "
         yield Label(f"{marker}{label}{age_str}")
 
+        summary = self._get_summary()
+        if summary:
+            yield Label(f"    [dim italic]{summary}[/dim italic]")
+
+    def _get_summary(self) -> str | None:
+        s = self.session
+        if not s.name:
+            return None
+        if s.away_summary:
+            return s.away_summary.split("\n")[0][:80]
+        if s.custom_title and s.custom_title != s.name:
+            return s.custom_title[:80]
+        return None
+
 
 class SessionBucket(Static):
     def __init__(
         self,
         state: SessionState,
         sessions: list[Session],
-        collapsed_max: int = 8,
         selected_idx: int = -1,
         start_idx: int = 0,
     ) -> None:
         self.state = state
         self.sessions = sessions
-        self.collapsed_max = collapsed_max
         self._selected_idx = selected_idx
         self._start_idx = start_idx
         super().__init__()
@@ -91,14 +103,9 @@ class SessionBucket(Static):
 
         yield Label(f"[{style}]{icon} {header} ({count})[/{style}]")
 
-        shown = self.sessions[:self.collapsed_max]
-        for i, session in enumerate(shown):
+        for i, session in enumerate(self.sessions):
             global_idx = self._start_idx + i
             yield SessionItem(session, selected=(global_idx == self._selected_idx))
-
-        remaining = count - len(shown)
-        if remaining > 0:
-            yield Label(f"  [dim]+{remaining} more...[/dim]")
 
 
 class SessionList(VerticalScroll):
@@ -140,7 +147,7 @@ class StatusBar(Static):
 
     def render(self) -> str:
         if self.paused:
-            return f"\u23f8  Paused \u2502 {self.session_count} sessions \u2502 [r]esume [q]uit"
+            return f"\u23f8  Paused \u2502 {self.session_count} sessions \u2502 [r]esume [q]uit \u2502 [dim]^B Tab=focus[/dim]"
         parts = [
             f"\u25b6 {self.poll_interval:.0f}s",
             f"{self.session_count} sessions",
@@ -148,4 +155,5 @@ class StatusBar(Static):
         if self.dead_count > 0:
             parts.append(f"{self.dead_count} dead")
         parts.append("[r]efresh [q]uit")
+        parts.append("[dim]^B Tab=focus[/dim]")
         return " \u2502 ".join(parts)
