@@ -31,7 +31,7 @@ WIN_ROWS=$(tput lines 2>/dev/null || echo 40)
 tmux new-session -d -s "$SESSION_NAME" -x "$WIN_COLS" -y "$WIN_ROWS"
 
 # Split: left pane (30%) for dashboard, right pane (70%) for shell
-tmux split-window -h -t "$SESSION_NAME" -l 70%
+tmux split-window -h -t "$SESSION_NAME" -l 80%
 
 # Run dashboard in the left pane (pane 0)
 tmux send-keys -t "${SESSION_NAME}:0.0" "ct dash --fullscreen" Enter
@@ -47,9 +47,12 @@ tmux bind-key -n F12 run-shell '
     if tmux list-panes -F "#{pane_id}" 2>/dev/null | grep -q "^${PANE}$"; then
         tmux break-pane -d -t "$PANE"
     else
-        tmux join-pane -b -h -l 30% -t claude-dash:0 -s "$PANE"
+        tmux join-pane -b -h -l 20% -t claude-dash:0 -s "$PANE"
     fi
 '
+
+# Bind F11 to toggle focus between dashboard and shell panes
+tmux bind-key -n F11 select-pane -t "{next}"
 
 # Focus the right pane (shell) and attach
 tmux select-pane -t "${SESSION_NAME}:0.1"

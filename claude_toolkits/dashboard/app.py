@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import platform
+import subprocess
 from datetime import datetime, timezone
 
 from textual.app import App, ComposeResult
@@ -80,17 +82,20 @@ class DashboardApp(App[None]):
         height: auto;
     }
     SessionItem {
-        height: 1;
+        height: auto;
     }
     SessionItem:hover {
         background: $accent 20%;
     }
     """
 
+    ENABLE_COMMAND_PALETTE = False
+
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("r", "refresh", "Refresh"),
-        Binding("enter", "detail", "Detail"),
+        Binding("enter", "open_session", "Open"),
+        Binding("d", "detail", "Detail"),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
         Binding("down", "cursor_down", "Down", show=False),
@@ -199,9 +204,61 @@ class DashboardApp(App[None]):
         session_list = self.query_one(SessionList)
         session_list.selected_idx = self._selected_idx
 
+    def action_open_session(self) -> None:
+        if not self._sessions or not (0 <= self._selected_idx < len(self._sessions)):
+            return
+        session = self._sessions[self._selected_idx]
+        if not session.pid:
+            self.notify("No PID for this session", severity="warning")
+            return
+        if not _activate_iterm_session(session.pid):
+            self.notify("Could not find terminal for this session", severity="warning")
+
     def action_detail(self) -> None:
         if self._sessions and 0 <= self._selected_idx < len(self._sessions):
             self.push_screen(DetailModal(self._sessions[self._selected_idx]))
 
     def action_quit(self) -> None:
         self.exit()
+
+
+def _activate_iterm_session(pid: int) -> bool:
+    if platform.system() != "Darwin":
+        return False
+    try:
+        result = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "tty="],
+            capture_output=True, text=True, timeout=2,
+        )
+        tty = result.stdout.strip()
+        if not tty:
+            return False
+        tty_path = f"/dev/{tty}"
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+
+    script = f'''
+        tell application "iTerm2"
+            repeat with w in windows
+                repeat with t in tabs of w
+                    repeat with s in sessions of t
+                        if tty of s is "{tty_path}" then
+                            select t
+                            tell w to select
+                            activate
+                            return true
+                        end if
+                    end repeat
+                end repeat
+            end repeat
+            return false
+        end tell
+    '''
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True, text=True, timeout=5,
+        )
+        return "true" in result.stdout.lower()
+    except (subprocess.TimeoutExpired, OSError):
+        return False
