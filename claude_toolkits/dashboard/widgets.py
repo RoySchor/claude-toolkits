@@ -139,23 +139,28 @@ class SessionList(VerticalScroll):
             yield Label("[dim]No active sessions found.[/dim]")
 
 
-class StatusBar(Static):
+class DashFooter(Static):
     poll_interval: reactive[float] = reactive(5.0)
     session_count: reactive[int] = reactive(0)
     paused: reactive[bool] = reactive(False)
     dead_count: reactive[int] = reactive(0)
 
     def render(self) -> str:
-        copy_hint = "[dim]Cmd+Opt+drag: copy text[/dim]"
+        def key(k: str, desc: str) -> str:
+            return f" [bold]{k}[/bold] [dim]{desc}[/dim] "
+
+        line1 = (
+            key("q", "Quit")
+            + key("r", "Refresh")
+            + key("enter", "Open")
+            + key("d", "Detail")
+            + key("ctrl+b h", "Exit Dashboard")
+        )
         if self.paused:
-            line1 = f"⏸  Paused │ {self.session_count} sessions │ [r]esume [q]uit │ [dim]ctrl+b h: Exit Dashboard[/dim]"
-            return f"{line1}\n{copy_hint}"
-        parts = [
-            f"▶ {self.poll_interval:.0f}s",
-            f"{self.session_count} sessions",
-        ]
+            status = f"[bold]⏸ paused[/bold] │ {self.session_count} sessions"
+        else:
+            status = f"Polling every {self.poll_interval:.0f}s │ {self.session_count} sessions"
         if self.dead_count > 0:
-            parts.append(f"{self.dead_count} dead")
-        parts.append("[r]efresh [q]uit")
-        parts.append("[dim]ctrl+b h: Exit Dashboard[/dim]")
-        return " │ ".join(parts) + f"\n{copy_hint}"
+            status += f" │ {self.dead_count} dead"
+        line2 = f" {status}  │  " + key("Cmd+Opt+drag", "Copy Text")
+        return f"{line1}\n{line2}"
