@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tmux sidebar launcher for ct dash
-# Ctrl+B h = switch pane focus, Ctrl+B Space = toggle sidebar, mouse click = switch pane
+# Ctrl+B h = switch pane focus, Ctrl+B Space = toggle sidebar
 
 SESSION_NAME="claude-dash"
 DASH_CMD=(ct dash --fullscreen)
@@ -61,9 +61,6 @@ tmux bind-key Space run-shell '
 
 # Ctrl+B h = switch focus between panes
 tmux bind-key h select-pane -t "{next}"
-
-# Enable mouse — click a pane to switch focus
-tmux set-option -t "$SESSION_NAME" mouse on
 
 # Focus the right pane (shell) and attach
 tmux select-pane -t "${SESSION_NAME}:0.1"
