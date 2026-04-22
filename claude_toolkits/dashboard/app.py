@@ -4,6 +4,7 @@ import asyncio
 import platform
 import re
 from datetime import datetime, timezone
+from time import monotonic
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -97,6 +98,7 @@ class DashboardApp(App[None]):
         Binding("r", "refresh", "Refresh"),
         Binding("enter", "open_session", "Open"),
         Binding("d", "detail", "Detail"),
+        Binding("f9", "exit_hint", "Exit Dashboard", show=True, key_display="ctrl+b+tab"),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
         Binding("down", "cursor_down", "Down", show=False),
@@ -113,6 +115,7 @@ class DashboardApp(App[None]):
         self._paused: bool = False
         self._all_stale_since: datetime | None = None
         self._poll_task: Timer | None = None
+        self._last_refresh: float = 0.0
         super().__init__()
 
     def compose(self) -> ComposeResult:
@@ -189,6 +192,11 @@ class DashboardApp(App[None]):
     def action_refresh(self) -> None:
         self._paused = False
         self._all_stale_since = None
+        now = monotonic()
+        if now - self._last_refresh < 2.0:
+            return
+        self._last_refresh = now
+        self.notify("Refreshing\u2026", timeout=1)
         self._do_scan()
 
     def action_cursor_down(self) -> None:
@@ -221,6 +229,9 @@ class DashboardApp(App[None]):
     def action_detail(self) -> None:
         if self._sessions and 0 <= self._selected_idx < len(self._sessions):
             self.push_screen(DetailModal(self._sessions[self._selected_idx]))
+
+    def action_exit_hint(self) -> None:
+        self.notify("Press Ctrl+B then Tab to switch to the shell pane", timeout=3)
 
     def action_quit(self) -> None:
         self.exit()

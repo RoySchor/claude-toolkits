@@ -36,10 +36,10 @@ class Session:
         if self.name:
             return self.name
         if self.custom_title:
-            return self.custom_title[:30]
+            return self.custom_title[:40]
         if self.away_summary:
             first_line = self.away_summary.split("\n")[0]
-            return first_line[:30]
+            return first_line[:40]
         if self.cwd:
             return Path(self.cwd).name
         return "(unnamed)"

@@ -1,6 +1,5 @@
 #!/bin/bash
 # Tmux sidebar launcher for ct dash
-# Creates a split: 20% left (dashboard TUI) | 80% right (user shell)
 # Ctrl+B Tab = switch focus, Ctrl+B Space = toggle sidebar visibility
 
 SESSION_NAME="claude-dash"
@@ -19,9 +18,14 @@ if [ -n "$TMUX" ]; then
     fi
 fi
 
-# If session already exists, attach to it
+# If session already exists, reattach only if dashboard pane is still alive
 if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
-    exec tmux attach-session -t "$SESSION_NAME"
+    DASH_PANE=$(tmux show-environment -t "$SESSION_NAME" DASH_PANE_ID 2>/dev/null | cut -d= -f2)
+    if [ -n "$DASH_PANE" ] && tmux list-panes -a -F '#{pane_id}' 2>/dev/null | grep -q "^${DASH_PANE}$"; then
+        exec tmux attach-session -t "$SESSION_NAME"
+    else
+        tmux kill-session -t "$SESSION_NAME"
+    fi
 fi
 
 # Create new session with split layout
@@ -30,8 +34,9 @@ WIN_ROWS=$(tput lines 2>/dev/null || echo 40)
 
 tmux new-session -d -s "$SESSION_NAME" -x "$WIN_COLS" -y "$WIN_ROWS"
 
-# Split: left pane (20%) for dashboard, right pane (80%) for shell
-tmux split-window -h -t "$SESSION_NAME" -l 80%
+# Shell pane gets most of the width; dashboard gets the rest
+SHELL_COLS=$((WIN_COLS * 99 / 100))
+tmux split-window -h -t "$SESSION_NAME" -l "$SHELL_COLS"
 
 # Run dashboard in the left pane (pane 0)
 tmux send-keys -t "${SESSION_NAME}:0.0" "ct dash --fullscreen" Enter
@@ -47,7 +52,9 @@ tmux bind-key Space run-shell '
     if tmux list-panes -F "#{pane_id}" 2>/dev/null | grep -q "^${PANE}$"; then
         tmux break-pane -d -t "$PANE"
     else
-        tmux join-pane -b -h -l 20% -t claude-dash:0 -s "$PANE"
+        COLS=$(tmux display-message -p "#{window_width}" 2>/dev/null || echo 120)
+        DCOLS=$((COLS * 1 / 100))
+        tmux join-pane -b -h -l "$DCOLS" -t claude-dash:0 -s "$PANE"
     fi
 '
 
