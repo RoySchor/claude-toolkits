@@ -5,7 +5,7 @@ Terminal dashboard for monitoring concurrent Claude Code sessions.
 ## Quick Start
 
 ```bash
-pip install -e .
+pip install -e .    # or pip3 install -e .
 ct install-hooks    # registers state-tracking hooks in ~/.claude/settings.json
 ct status           # show all sessions with states
 ```
