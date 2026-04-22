@@ -6,6 +6,7 @@ Terminal dashboard for monitoring concurrent Claude Code sessions.
 
 ```bash
 pip install -e .    # or pip3 install -e .
+brew install tmux   # Allows sidebar mode
 ct install-hooks    # registers state-tracking hooks in ~/.claude/settings.json
 ct status           # show all sessions with states
 ```
