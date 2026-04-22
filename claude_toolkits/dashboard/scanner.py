@@ -102,6 +102,8 @@ class SessionScanner:
 
             if not alive:
                 session.state = SessionState.DEAD
+                if sid in hook_states:
+                    self._cleanup_state_file(sid)
                 sessions.append(session)
                 continue
 
@@ -211,6 +213,14 @@ class SessionScanner:
         cache = self._caches[sid]
         session.custom_title = cache.custom_title
         session.away_summary = cache.away_summary
+
+    @staticmethod
+    def _cleanup_state_file(session_id: str) -> None:
+        state_file = STATE_DIR / f"{session_id}.json"
+        try:
+            state_file.unlink(missing_ok=True)
+        except OSError:
+            pass
 
     @staticmethod
     def _get_mtime(path: Path) -> float:

@@ -75,9 +75,9 @@ class SessionItem(Static):
         if not s.name:
             return None
         if s.away_summary:
-            return s.away_summary.split("\n")[0][:80]
+            return s.away_summary.split("\n")[0][:100]
         if s.custom_title and s.custom_title != s.name:
-            return s.custom_title[:80]
+            return s.custom_title[:100]
         return None
 
 
@@ -147,7 +147,7 @@ class StatusBar(Static):
 
     def render(self) -> str:
         if self.paused:
-            return f"\u23f8  Paused \u2502 {self.session_count} sessions \u2502 [r]esume [q]uit \u2502 [dim]^B Tab=focus[/dim]"
+            return f"\u23f8  Paused \u2502 {self.session_count} sessions \u2502 [r]esume [q]uit \u2502 [dim]^B Tab: Exit Dashboard[/dim]"
         parts = [
             f"\u25b6 {self.poll_interval:.0f}s",
             f"{self.session_count} sessions",
@@ -155,5 +155,5 @@ class StatusBar(Static):
         if self.dead_count > 0:
             parts.append(f"{self.dead_count} dead")
         parts.append("[r]efresh [q]uit")
-        parts.append("[dim]^B Tab=focus[/dim]")
+        parts.append("[dim]^B Tab: Exit Dashboard[/dim]")
         return " \u2502 ".join(parts)
