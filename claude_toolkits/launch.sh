@@ -1,7 +1,7 @@
 #!/bin/bash
 # Tmux sidebar launcher for ct dash
-# Creates a split: 30% left (dashboard TUI) | 70% right (user shell)
-# Re-running reattaches to existing session. F12 toggles sidebar visibility.
+# Creates a split: 20% left (dashboard TUI) | 80% right (user shell)
+# Ctrl+B Tab = switch focus, Ctrl+B Space = toggle sidebar visibility
 
 SESSION_NAME="claude-dash"
 DASH_CMD=(ct dash --fullscreen)
@@ -36,12 +36,12 @@ tmux split-window -h -t "$SESSION_NAME" -l 80%
 # Run dashboard in the left pane (pane 0)
 tmux send-keys -t "${SESSION_NAME}:0.0" "ct dash --fullscreen" Enter
 
-# Capture the dashboard pane ID for reliable F12 toggle
+# Capture the dashboard pane ID for reliable toggle
 DASH_PANE_ID=$(tmux display-message -t "${SESSION_NAME}:0.0" -p '#{pane_id}')
 tmux set-environment -t "$SESSION_NAME" DASH_PANE_ID "$DASH_PANE_ID"
 
-# Bind F12 to toggle dashboard pane visibility using tracked pane ID
-tmux bind-key -n F12 run-shell '
+# Ctrl+B Space = toggle dashboard visibility using tracked pane ID
+tmux bind-key Space run-shell '
     PANE=$(tmux show-environment -t claude-dash DASH_PANE_ID 2>/dev/null | cut -d= -f2)
     if [ -z "$PANE" ]; then exit 0; fi
     if tmux list-panes -F "#{pane_id}" 2>/dev/null | grep -q "^${PANE}$"; then
@@ -51,8 +51,8 @@ tmux bind-key -n F12 run-shell '
     fi
 '
 
-# Bind F11 to toggle focus between dashboard and shell panes
-tmux bind-key -n F11 select-pane -t "{next}"
+# Ctrl+B Tab = switch focus between panes
+tmux bind-key Tab select-pane -t "{next}"
 
 # Focus the right pane (shell) and attach
 tmux select-pane -t "${SESSION_NAME}:0.1"
