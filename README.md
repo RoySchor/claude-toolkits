@@ -10,6 +10,12 @@ ct install-hooks    # registers state-tracking hooks in ~/.claude/settings.json
 ct status           # show all sessions with states
 ```
 
+## Killing any Existing Sessions
+
+```bash
+tmux kill-session -t claude-dash
+```
+
 ## How It Works
 
 **Primary detection (real-time):** Hooks fire on Claude Code lifecycle events (`SessionStart`, `UserPromptSubmit`, `Stop`, `SessionEnd`) and write per-session state files to `~/.claude-toolkits/state/`.
