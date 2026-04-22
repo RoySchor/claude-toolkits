@@ -75,9 +75,9 @@ class SessionItem(Static):
         if not s.name:
             return None
         if s.away_summary:
-            return s.away_summary.split("\n")[0][:100]
+            return s.away_summary.split("\n")[0][:125]
         if s.custom_title and s.custom_title != s.name:
-            return s.custom_title[:100]
+            return s.custom_title[:125]
         return None
 
 

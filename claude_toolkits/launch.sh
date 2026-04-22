@@ -35,7 +35,9 @@ WIN_ROWS=$(tput lines 2>/dev/null || echo 40)
 
 tmux new-session -d -s "$SESSION_NAME" -x "$WIN_COLS" -y "$WIN_ROWS"
 
-tmux split-window -h -t "$SESSION_NAME" -l 50%
+# Shell pane gets most of the width; dashboard gets the rest
+SHELL_COLS=$((WIN_COLS * 99 / 100))
+tmux split-window -h -t "$SESSION_NAME" -l "$SHELL_COLS"
 
 # Run dashboard in the left pane (pane 0)
 tmux send-keys -t "${SESSION_NAME}:0.0" "ct dash --fullscreen" Enter
@@ -51,7 +53,9 @@ tmux bind-key Space run-shell '
     if tmux list-panes -F "#{pane_id}" 2>/dev/null | grep -q "^${PANE}$"; then
         tmux break-pane -d -t "$PANE"
     else
-        tmux join-pane -b -h -l 50% -t claude-dash:0 -s "$PANE"
+        COLS=$(tmux display-message -p "#{window_width}" 2>/dev/null || echo 120)
+        DCOLS=$((COLS * 1 / 100))
+        tmux join-pane -b -h -l "$DCOLS" -t claude-dash:0 -s "$PANE"
     fi
 '
 
