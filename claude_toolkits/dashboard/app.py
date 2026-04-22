@@ -11,11 +11,11 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.screen import ModalScreen
 from textual.timer import Timer
-from textual.widgets import Footer, Header, Label, Static
+from textual.widgets import Header, Label, Static
 
 from .models import Session, SessionState
 from .scanner import SessionScanner, STATE_DIR
-from .widgets import SessionList, StatusBar
+from .widgets import DashFooter, SessionList
 
 
 class DetailModal(ModalScreen[None]):
@@ -73,10 +73,10 @@ class DashboardApp(App[None]):
     #session-list {
         height: 1fr;
     }
-    #status-bar {
+    #dash-footer {
         dock: bottom;
-        height: 1;
-        background: $accent;
+        height: 2;
+        background: $panel;
         color: $text;
         padding: 0 1;
     }
@@ -94,11 +94,10 @@ class DashboardApp(App[None]):
     ENABLE_COMMAND_PALETTE = False
 
     BINDINGS = [
-        Binding("q", "quit", "Quit"),
-        Binding("r", "refresh", "Refresh"),
-        Binding("enter", "open_session", "Open"),
-        Binding("d", "detail", "Detail"),
-        Binding("f9", "exit_hint", "Exit Dashboard", show=True, key_display="ctrl+b h"),
+        Binding("q", "quit", "Quit", show=False),
+        Binding("r", "refresh", "Refresh", show=False),
+        Binding("enter", "open_session", "Open", show=False),
+        Binding("d", "detail", "Detail", show=False),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
         Binding("down", "cursor_down", "Down", show=False),
@@ -121,8 +120,7 @@ class DashboardApp(App[None]):
     def compose(self) -> ComposeResult:
         yield Header()
         yield SessionList(id="session-list")
-        yield StatusBar(id="status-bar")
-        yield Footer()
+        yield DashFooter(id="dash-footer")
 
     def on_mount(self) -> None:
         self._do_scan()
@@ -137,11 +135,11 @@ class DashboardApp(App[None]):
         session_list.selected_idx = self._selected_idx
         session_list.sessions = self._sessions
 
-        status_bar = self.query_one(StatusBar)
-        status_bar.session_count = len(self._sessions)
-        status_bar.poll_interval = self._poll_interval
-        status_bar.paused = self._paused
-        status_bar.dead_count = sum(1 for s in self._sessions if s.state == SessionState.DEAD)
+        footer = self.query_one(DashFooter)
+        footer.session_count = len(self._sessions)
+        footer.poll_interval = self._poll_interval
+        footer.paused = self._paused
+        footer.dead_count = sum(1 for s in self._sessions if s.state == SessionState.DEAD)
 
         self._adapt_polling()
 
@@ -165,8 +163,9 @@ class DashboardApp(App[None]):
                 if stale_hours > 2:
                     self._paused = True
                     self._stop_timer()
-                    status_bar = self.query_one(StatusBar)
-                    status_bar.paused = True
+                    footer = self.query_one(DashFooter)
+                    footer.paused = True
+                    self.notify("Polling paused — press r to resume", timeout=0)
                     return
         else:
             new_interval = 5.0
@@ -229,9 +228,6 @@ class DashboardApp(App[None]):
     def action_detail(self) -> None:
         if self._sessions and 0 <= self._selected_idx < len(self._sessions):
             self.push_screen(DetailModal(self._sessions[self._selected_idx]))
-
-    def action_exit_hint(self) -> None:
-        self.notify("Press Ctrl+B then Tab to switch to the shell pane", timeout=3)
 
     def action_quit(self) -> None:
         self.exit()
