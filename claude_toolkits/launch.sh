@@ -30,7 +30,7 @@ WIN_ROWS=$(tput lines 2>/dev/null || echo 40)
 
 tmux new-session -d -s "$SESSION_NAME" -x "$WIN_COLS" -y "$WIN_ROWS"
 
-# Split: left pane (20%) for dashboard, right pane (70%) for shell
+# Split: left pane (20%) for dashboard, right pane (80%) for shell
 tmux split-window -h -t "$SESSION_NAME" -l 80%
 
 # Run dashboard in the left pane (pane 0)

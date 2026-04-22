@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import platform
-import subprocess
+import re
 from datetime import datetime, timezone
 
 from textual.app import App, ComposeResult
@@ -204,15 +205,18 @@ class DashboardApp(App[None]):
         session_list = self.query_one(SessionList)
         session_list.selected_idx = self._selected_idx
 
-    def action_open_session(self) -> None:
+    async def action_open_session(self) -> None:
         if not self._sessions or not (0 <= self._selected_idx < len(self._sessions)):
             return
         session = self._sessions[self._selected_idx]
         if not session.pid:
             self.notify("No PID for this session", severity="warning")
             return
-        if not _activate_iterm_session(session.pid):
-            self.notify("Could not find terminal for this session", severity="warning")
+        if platform.system() != "Darwin":
+            self.notify("Open session requires macOS + iTerm2", severity="warning")
+            return
+        if not await _activate_iterm_session(session.pid):
+            self.notify("Could not find session in iTerm2", severity="warning")
 
     def action_detail(self) -> None:
         if self._sessions and 0 <= self._selected_idx < len(self._sessions):
@@ -222,19 +226,22 @@ class DashboardApp(App[None]):
         self.exit()
 
 
-def _activate_iterm_session(pid: int) -> bool:
-    if platform.system() != "Darwin":
-        return False
+_TTY_PATTERN = re.compile(r"^[a-zA-Z0-9/]+$")
+
+
+async def _activate_iterm_session(pid: int) -> bool:
     try:
-        result = subprocess.run(
-            ["ps", "-p", str(pid), "-o", "tty="],
-            capture_output=True, text=True, timeout=2,
+        proc = await asyncio.create_subprocess_exec(
+            "ps", "-p", str(pid), "-o", "tty=",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
-        tty = result.stdout.strip()
-        if not tty:
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=2)
+        tty = stdout.decode().strip()
+        if not tty or not _TTY_PATTERN.match(tty):
             return False
         tty_path = f"/dev/{tty}"
-    except (subprocess.TimeoutExpired, OSError):
+    except (asyncio.TimeoutError, OSError):
         return False
 
     script = f'''
@@ -255,10 +262,12 @@ def _activate_iterm_session(pid: int) -> bool:
         end tell
     '''
     try:
-        result = subprocess.run(
-            ["osascript", "-e", script],
-            capture_output=True, text=True, timeout=5,
+        proc = await asyncio.create_subprocess_exec(
+            "osascript", "-e", script,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
-        return "true" in result.stdout.lower()
-    except (subprocess.TimeoutExpired, OSError):
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=2)
+        return "true" in stdout.decode().lower()
+    except (asyncio.TimeoutError, OSError):
         return False

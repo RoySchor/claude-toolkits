@@ -72,10 +72,10 @@ class SessionItem(Static):
 
     def _get_summary(self) -> str | None:
         s = self.session
+        if not s.name:
+            return None
         if s.away_summary:
-            text = s.away_summary.split("\n")[0][:50]
-            if text != s.label:
-                return text
+            return s.away_summary.split("\n")[0][:50]
         if s.custom_title and s.custom_title != s.name:
             return s.custom_title[:50]
         return None
