@@ -1,6 +1,5 @@
 #!/bin/bash
 # Tmux sidebar launcher for ct dash
-# Creates a split: 15% left (dashboard TUI) | 85% right (user shell)
 # Ctrl+B Tab = switch focus, Ctrl+B Space = toggle sidebar visibility
 
 SESSION_NAME="claude-dash"

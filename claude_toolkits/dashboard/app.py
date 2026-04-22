@@ -190,12 +190,12 @@ class DashboardApp(App[None]):
         self._do_scan()
 
     def action_refresh(self) -> None:
+        self._paused = False
+        self._all_stale_since = None
         now = monotonic()
         if now - self._last_refresh < 2.0:
             return
         self._last_refresh = now
-        self._paused = False
-        self._all_stale_since = None
         self.notify("Refreshing\u2026", timeout=1)
         self._do_scan()
 
