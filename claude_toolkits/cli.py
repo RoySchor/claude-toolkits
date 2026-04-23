@@ -125,14 +125,14 @@ def cmd_dash(fullscreen: bool = False) -> None:
             )
         from .dashboard.app import DashboardApp
         app = DashboardApp()
-        app.run()
+        app.run(mouse=False)
         return
 
     launch_script = Path(__file__).parent / "launch.sh"
     if not launch_script.exists():
         from .dashboard.app import DashboardApp
         app = DashboardApp()
-        app.run()
+        app.run(mouse=False)
         return
 
     os.execvp("bash", ["bash", str(launch_script)])
