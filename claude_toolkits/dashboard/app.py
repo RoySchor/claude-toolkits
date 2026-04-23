@@ -230,7 +230,9 @@ class DashboardApp(App[None]):
             self.push_screen(DetailModal(self._sessions[self._selected_idx]))
 
     def action_quit(self) -> None:
+        import subprocess
         self.exit()
+        subprocess.run(["tmux", "kill-session", "-t", "claude-dash"], stderr=subprocess.DEVNULL)
 
 
 _TTY_PATTERN = re.compile(r"^[a-zA-Z0-9/]+$")

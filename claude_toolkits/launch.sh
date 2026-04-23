@@ -59,6 +59,10 @@ tmux bind-key Space run-shell '
     fi
 '
 
+# Let tmux notify panes about focus changes so Textual properly
+# disables mouse capture when the dashboard pane loses focus
+tmux set-option -t "$SESSION_NAME" focus-events on
+
 # Ctrl+B h = switch focus between panes
 tmux bind-key h select-pane -t "{next}"
 
