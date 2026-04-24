@@ -33,6 +33,7 @@ WIN_COLS=$(tput cols 2>/dev/null || echo 120)
 WIN_ROWS=$(tput lines 2>/dev/null || echo 40)
 
 tmux new-session -d -s "$SESSION_NAME" -x "$WIN_COLS" -y "$WIN_ROWS"
+tmux set-option -t "$SESSION_NAME" history-limit 50000
 
 # Shell pane gets most of the width; dashboard gets the rest
 SHELL_COLS=$((WIN_COLS * 99 / 100))
@@ -62,6 +63,7 @@ tmux bind-key Space run-shell '
 # Let tmux notify panes about focus changes so Textual properly
 # disables mouse capture when the dashboard pane loses focus
 tmux set-option -t "$SESSION_NAME" focus-events on
+tmux set-option -t "$SESSION_NAME" mouse on
 
 # Ctrl+B h = switch focus between panes
 tmux bind-key h select-pane -t "{next}"

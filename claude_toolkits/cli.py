@@ -125,6 +125,10 @@ WRAPPER_FUNCTION = r'''claude() {
         "$(printf '%q ' command claude "$@")"
     tmux -L ct-sessions set -t "$sess_name" status off
     tmux -L ct-sessions set -t "$sess_name" prefix C-@
+    tmux -L ct-sessions set -g history-limit 50000
+    tmux -L ct-sessions set -g mouse on
+    tmux -L ct-sessions bind -T root WheelUpPane if-shell -Ft= '#{pane_in_mode}' 'send-keys -M' 'copy-mode -et='
+    tmux -L ct-sessions bind -T root WheelDownPane send-keys -M
 
     tmux -L ct-sessions attach -t "$sess_name"
 }'''
@@ -197,14 +201,14 @@ def cmd_dash(fullscreen: bool = False) -> None:
             )
         from .dashboard.app import DashboardApp
         app = DashboardApp()
-        app.run(mouse=False)
+        app.run(mouse=True)
         return
 
     launch_script = Path(__file__).parent / "launch.sh"
     if not launch_script.exists():
         from .dashboard.app import DashboardApp
         app = DashboardApp()
-        app.run(mouse=False)
+        app.run(mouse=True)
         return
 
     os.execvp("bash", ["bash", str(launch_script)])

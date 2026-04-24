@@ -364,9 +364,20 @@ class DashboardApp(App[None]):
             self._pending_shell_names.discard(name)
             self.notify("Failed to create shell session", severity="error")
             return
-        for opt_args in [("status", "off"), ("prefix", "C-@")]:
+        for opt_args in [("set", "-t", name, "status", "off"), ("set", "-t", name, "prefix", "C-@"),
+                         ("set", "-g", "history-limit", "50000"), ("set", "-g", "mouse", "on")]:
             p = await asyncio.create_subprocess_exec(
-                "tmux", "-L", "ct-sessions", "set", "-t", name, *opt_args,
+                "tmux", "-L", "ct-sessions", *opt_args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await asyncio.wait_for(p.communicate(), timeout=2)
+        for bind_args in [
+            ("bind", "-T", "root", "WheelUpPane", "if-shell", "-Ft=", "#{pane_in_mode}", "send-keys -M", "copy-mode -et="),
+            ("bind", "-T", "root", "WheelDownPane", "send-keys", "-M"),
+        ]:
+            p = await asyncio.create_subprocess_exec(
+                "tmux", "-L", "ct-sessions", *bind_args,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
