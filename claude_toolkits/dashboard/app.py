@@ -101,6 +101,7 @@ class DashboardApp(App[None]):
         Binding("enter", "open_session", "Open", show=False),
         Binding("n", "new_shell", "New Shell", show=False),
         Binding("d", "detail", "Detail", show=False),
+        Binding("s", "scroll_session", "Scroll", show=False),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
         Binding("down", "cursor_down", "Down", show=False),
@@ -350,6 +351,20 @@ class DashboardApp(App[None]):
         if self._sessions and 0 <= self._selected_idx < len(self._sessions):
             self.push_screen(DetailModal(self._sessions[self._selected_idx]))
 
+    async def action_scroll_session(self) -> None:
+        if not self._active_ct_session:
+            self.notify("No active session to scroll", severity="warning")
+            return
+        proc = await asyncio.create_subprocess_exec(
+            "tmux", "-L", "ct-sessions", "copy-mode", "-u",
+            "-t", self._active_ct_session,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await asyncio.wait_for(proc.communicate(), timeout=2)
+        if proc.returncode != 0:
+            self.notify("Could not enter scroll mode", severity="warning")
+
     async def action_new_shell(self) -> None:
         name = self._next_shell_name()
         size_args = await self._get_right_pane_size()
@@ -364,9 +379,20 @@ class DashboardApp(App[None]):
             self._pending_shell_names.discard(name)
             self.notify("Failed to create shell session", severity="error")
             return
-        for opt_args in [("status", "off"), ("prefix", "C-@")]:
+        for opt_args in [("set", "-t", name, "status", "off"), ("set", "-t", name, "prefix", "C-@"),
+                         ("set", "-g", "history-limit", "50000"), ("set", "-g", "mouse", "on")]:
             p = await asyncio.create_subprocess_exec(
-                "tmux", "-L", "ct-sessions", "set", "-t", name, *opt_args,
+                "tmux", "-L", "ct-sessions", *opt_args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await asyncio.wait_for(p.communicate(), timeout=2)
+        for bind_args in [
+            ("bind", "-T", "root", "WheelUpPane", "if-shell", "-Ft=", "#{pane_in_mode}", "send-keys -M", "copy-mode -et="),
+            ("bind", "-T", "root", "WheelDownPane", "send-keys", "-M"),
+        ]:
+            p = await asyncio.create_subprocess_exec(
+                "tmux", "-L", "ct-sessions", *bind_args,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
