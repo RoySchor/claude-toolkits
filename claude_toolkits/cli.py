@@ -93,7 +93,8 @@ def cmd_install_hooks() -> None:
     hook_entry = [{"hooks": [{"type": "command", "command": hook_command}]}]
 
     hooks = settings.setdefault("hooks", {})
-    for event in ("SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"):
+    for event in ("SessionStart", "UserPromptSubmit", "Stop", "SessionEnd",
+                   "PermissionRequest", "Notification", "SubagentStart"):
         existing = hooks.get(event, [])
         already_installed = any(
             hook_command in json.dumps(rule)
@@ -109,6 +110,83 @@ def cmd_install_hooks() -> None:
     console.print("[green]✓[/green] Hooks registered in: " + str(CLAUDE_SETTINGS))
     console.print("[green]✓[/green] State directory: " + str(state_dir))
     console.print("\n[dim]New Claude sessions will now report state in real-time.[/dim]")
+
+
+WRAPPER_START = "# >>> ct-wrapper (managed by claude-toolkits — do not edit) >>>"
+WRAPPER_END = "# <<< ct-wrapper <<<"
+WRAPPER_FUNCTION = r'''claude() {
+    local dir_slug
+    dir_slug=$(basename "$PWD" | tr -cd 'a-zA-Z0-9_-')
+    local sess_name="ct-${dir_slug}-$$"
+
+    local cmd="command claude"
+    local arg
+    for arg in "$@"; do
+        cmd="$cmd '$(printf '%s' "$arg" | sed "s/'/'\\\\''/g")'"
+    done
+
+    tmux -L ct-sessions new-session -d -s "$sess_name" \
+        -x "$(tput cols)" -y "$(tput lines)" \
+        "$cmd"
+    tmux -L ct-sessions set -t "$sess_name" status off
+    tmux -L ct-sessions set -t "$sess_name" prefix None
+
+    trap 'tmux -L ct-sessions kill-session -t "$sess_name" 2>/dev/null' EXIT
+    tmux -L ct-sessions attach -t "$sess_name"
+}'''
+
+ZSHRC = Path.home() / ".zshrc"
+
+
+def cmd_install_wrapper() -> None:
+    console = Console()
+
+    if ZSHRC.exists():
+        content = ZSHRC.read_text()
+        if WRAPPER_START in content:
+            console.print("[yellow]Wrapper already installed in ~/.zshrc[/yellow]")
+            return
+        if "claude()" in content or "function claude" in content:
+            console.print(
+                "[red]Error: An existing claude() function or alias found in ~/.zshrc.\n"
+                "Remove it first, then re-run ct install-wrapper.[/red]"
+            )
+            sys.exit(1)
+    else:
+        content = ""
+
+    block = f"\n{WRAPPER_START}\n{WRAPPER_FUNCTION}\n{WRAPPER_END}\n"
+    ZSHRC.write_text(content + block)
+
+    console.print("[green]✓[/green] Shell wrapper installed in ~/.zshrc")
+    console.print("[dim]Open a new terminal tab for the wrapper to take effect.[/dim]")
+    console.print("[dim]Run 'ct uninstall-wrapper' to remove it.[/dim]")
+
+
+def cmd_uninstall_wrapper() -> None:
+    console = Console()
+
+    if not ZSHRC.exists():
+        console.print("[dim]~/.zshrc not found — nothing to remove.[/dim]")
+        return
+
+    content = ZSHRC.read_text()
+    if WRAPPER_START not in content:
+        console.print("[dim]No ct-wrapper block found in ~/.zshrc — nothing to remove.[/dim]")
+        return
+
+    start = content.index(WRAPPER_START)
+    end = content.index(WRAPPER_END) + len(WRAPPER_END)
+    while end < len(content) and content[end] == "\n":
+        end += 1
+    while start > 0 and content[start - 1] == "\n":
+        start -= 1
+
+    cleaned = content[:start] + content[end:]
+    ZSHRC.write_text(cleaned)
+
+    console.print("[green]✓[/green] Shell wrapper removed from ~/.zshrc")
+    console.print("[dim]Open a new terminal tab for the change to take effect.[/dim]")
 
 
 def cmd_dash(fullscreen: bool = False) -> None:
@@ -148,7 +226,11 @@ def main() -> None:
     elif args[0] == "dash":
         fullscreen = "--fullscreen" in args
         cmd_dash(fullscreen=fullscreen)
+    elif args[0] == "install-wrapper":
+        cmd_install_wrapper()
+    elif args[0] == "uninstall-wrapper":
+        cmd_uninstall_wrapper()
     else:
         print(f"Unknown command: {args[0]}")
-        print("Usage: ct [status|install-hooks|dash [--fullscreen]]")
+        print("Usage: ct [status|install-hooks|install-wrapper|uninstall-wrapper|dash [--fullscreen]]")
         sys.exit(1)

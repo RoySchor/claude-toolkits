@@ -1,6 +1,7 @@
 #!/bin/bash
 # state_tracker.sh — Claude Code hook that writes per-session state files
-# Registered for: SessionStart, UserPromptSubmit, Stop, SessionEnd
+# Registered for: SessionStart, UserPromptSubmit, Stop, SessionEnd,
+#                 PermissionRequest, Notification, SubagentStart
 # Receives session JSON on stdin
 
 STATE_DIR="$HOME/.claude-toolkits/state"
@@ -21,6 +22,15 @@ case "$EVENT" in
         STATE="idle"
         ;;
     "UserPromptSubmit")
+        STATE="cooking"
+        ;;
+    "PermissionRequest")
+        STATE="needs_input"
+        ;;
+    "Notification")
+        STATE="needs_input"
+        ;;
+    "SubagentStart")
         STATE="cooking"
         ;;
     "Stop")

@@ -115,6 +115,8 @@ class DashboardApp(App[None]):
         self._all_stale_since: datetime | None = None
         self._poll_task: Timer | None = None
         self._last_refresh: float = 0.0
+        self._ct_client: str | None = None
+        self._active_ct_session: str | None = None
         super().__init__()
 
     def compose(self) -> ComposeResult:
@@ -216,6 +218,11 @@ class DashboardApp(App[None]):
         if not self._sessions or not (0 <= self._selected_idx < len(self._sessions)):
             return
         session = self._sessions[self._selected_idx]
+
+        if session.tmux_session_name:
+            await self._switch_ct_session(session.tmux_session_name)
+            return
+
         if not session.pid:
             self.notify("No PID for this session", severity="warning")
             return
@@ -224,6 +231,67 @@ class DashboardApp(App[None]):
             return
         if not await _activate_iterm_session(session.pid):
             self.notify("Could not find session in iTerm2", severity="warning")
+
+    async def _switch_ct_session(self, tmux_name: str) -> None:
+        if self._ct_client:
+            proc = await asyncio.create_subprocess_exec(
+                "tmux", "-L", "ct-sessions", "switch-client",
+                "-c", self._ct_client, "-t", tmux_name,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=2)
+            if proc.returncode == 0:
+                self._active_ct_session = tmux_name
+                return
+            self._ct_client = None
+
+        right_pane = await self._get_right_pane_id()
+        if not right_pane:
+            self.notify("Could not find right pane", severity="warning")
+            return
+
+        cmd = f"tmux -L ct-sessions attach -t {tmux_name}"
+        proc = await asyncio.create_subprocess_exec(
+            "tmux", "send-keys", "-t", right_pane, cmd, "Enter",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await asyncio.wait_for(proc.communicate(), timeout=2)
+        self._active_ct_session = tmux_name
+
+        await asyncio.sleep(0.3)
+        self._ct_client = await self._get_ct_client()
+
+    async def _get_right_pane_id(self) -> str | None:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "tmux", "display-message", "-t", "claude-dash:0.1",
+                "-p", "#{pane_id}",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=2)
+            pane_id = stdout.decode().strip()
+            return pane_id if pane_id else None
+        except (asyncio.TimeoutError, OSError):
+            return None
+
+    async def _get_ct_client(self) -> str | None:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "tmux", "-L", "ct-sessions", "list-clients",
+                "-F", "#{client_name}",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=2)
+            if proc.returncode != 0:
+                return None
+            clients = stdout.decode().strip().split("\n")
+            return clients[0] if clients and clients[0] else None
+        except (asyncio.TimeoutError, OSError):
+            return None
 
     def action_detail(self) -> None:
         if self._sessions and 0 <= self._selected_idx < len(self._sessions):
