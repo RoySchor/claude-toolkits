@@ -247,8 +247,8 @@ class DashboardApp(App[None]):
             self._ct_client = None
 
         if self._active_ct_session:
-            self.notify("Lost connection to right pane", severity="warning")
-            return
+            self._active_ct_session = None
+            self._ct_client = None
 
         right_pane = await self._get_right_pane_id()
         if not right_pane:

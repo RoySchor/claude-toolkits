@@ -20,7 +20,8 @@ ct dash             # launch the live dashboard
 
 1. **Installs hooks** — registers state-tracking hooks in `~/.claude/settings.json` so the dashboard knows session state in real-time
 2. **Installs shell wrapper** — adds a `claude()` function to `~/.zshrc` that wraps each session in an invisible tmux layer, enabling in-place session switching from the dashboard
-3. **Reloads shell** — sources `~/.zshrc` so the wrapper takes effect immediately
+
+After setup, run `source ~/.zshrc` in your current shell or open a new terminal tab for the wrapper to take effect.
 
 You can also run these individually: `ct install-hooks`, `ct install-wrapper`, `ct uninstall-wrapper`.
 

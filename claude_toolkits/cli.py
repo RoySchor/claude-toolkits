@@ -221,13 +221,9 @@ def cmd_setup() -> None:
     cmd_install_wrapper()
     console.print()
 
-    console.print("[dim]3/3 Reloading shell...[/dim]")
-    import subprocess
-    subprocess.run(["zsh", "-c", f"source {ZSHRC}"], env={**__import__('os').environ})
-    console.print("[green]✓[/green] Shell reloaded")
-
     console.print("\n[bold green]Setup complete.[/bold green]")
-    console.print("[dim]Close existing Claude sessions and reopen them for the wrapper to take effect.[/dim]")
+    console.print(f"[dim]Run: [bold]source {ZSHRC}[/bold] in your current shell, or open a new terminal tab.[/dim]")
+    console.print("[dim]Then close existing Claude sessions and reopen them for the wrapper to take effect.[/dim]")
     console.print("[dim]Run 'ct dash' to start the dashboard.[/dim]")
 
 
