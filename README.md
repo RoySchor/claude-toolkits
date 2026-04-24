@@ -2,68 +2,74 @@
 
 Terminal dashboard for monitoring concurrent Claude Code sessions.
 
+![Dashboard](https://img.shields.io/badge/TUI-Textual-blue) ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
+
 ## Quick Start
 
 ```bash
-pip install -e .    # or pip3 install -e .
-brew install tmux   # required for sidebar mode
-ct setup            # installs hooks, shell wrapper, reloads shell
+pip install -e .
+brew install tmux jq
+ct setup
+source ~/.zshrc      # or open a new terminal tab
 ```
 
-Then close any existing Claude sessions and reopen them (so they start under the wrapper).
+Close any existing Claude sessions and reopen them so they start under the wrapper.
 
 ```bash
-ct dash             # launch the live dashboard
+ct dash
 ```
 
-## What `ct setup` Does
+## What It Does
 
-1. **Installs hooks** — registers state-tracking hooks in `~/.claude/settings.json` so the dashboard knows session state in real-time
-2. **Installs shell wrapper** — adds a `claude()` function to `~/.zshrc` that wraps each session in an invisible tmux layer, enabling in-place session switching from the dashboard
+The dashboard runs as a tmux sidebar alongside your terminal. It shows all your Claude sessions grouped by state, lets you switch between them instantly, and supports trackpad scrollback.
 
-After setup, run `source ~/.zshrc` in your current shell or open a new terminal tab for the wrapper to take effect.
-
-You can also run these individually: `ct install-hooks`, `ct install-wrapper`, `ct uninstall-wrapper`.
-
-## How It Works
-
-**Hook-based detection:** Hooks fire on Claude Code lifecycle events (`SessionStart`, `UserPromptSubmit`, `PermissionRequest`, `PreToolUse`, `SubagentStart`, `Stop`, `SessionEnd`) and write per-session state files to `~/.claude-toolkits/state/`.
-
-**In-place switching:** The shell wrapper starts each Claude session inside a separate tmux server (`ct-sessions`). When you press Enter on a session in the dashboard, it swaps the right pane to that session instantly — no tab switching.
-
-**Fallback:** Sessions started without the wrapper fall back to iTerm2 tab activation via AppleScript. Sessions started before hooks were installed derive state from transcript files.
+Each Claude session runs inside an invisible tmux layer (`ct-sessions`). The dashboard swaps the right pane between sessions when you press Enter — no tab switching needed.
 
 ## Session States
 
 | State | Meaning |
 |---|---|
-| 🔥 COOKING | Claude is actively generating |
-| 🔔 NEEDS YOU | Waiting for tool approval (permission prompt) |
-| ✅ RECENT | Turn complete, active < 12h |
-| 💤 STALE | Idle > 12h |
+| COOKING | Claude is actively generating |
+| NEEDS YOU | Waiting for tool approval |
+| RECENT | Turn complete, active within 12h |
+| SHELL | Plain terminal session (created from dashboard) |
+| STALE | Idle > 12h |
+| DEAD | Process exited |
+
+## Dashboard Keys
+
+| Key | Action |
+|---|---|
+| `Enter` | Switch to selected session |
+| `n` | Open a new shell session |
+| `d` | Show session detail |
+| `r` | Refresh |
+| `q` | Quit |
+| Arrows | Navigate sessions |
+| Trackpad scroll | Scrollback in active session |
+| `Ctrl+B h` | Switch focus between dashboard and terminal |
+| `Ctrl+B Space` | Toggle dashboard sidebar visibility |
+| `Cmd+Opt+drag` | Copy text (bypasses tmux mouse capture) |
 
 ## Commands
 
 | Command | Description |
 |---|---|
-| `ct setup` | One-time setup: hooks + wrapper + shell reload |
-| `ct dash` | Launch live TUI dashboard |
+| `ct setup` | One-time setup (hooks + shell wrapper) |
+| `ct dash` | Launch dashboard |
 | `ct dash --fullscreen` | Dashboard without tmux sidebar |
 | `ct status` | Print session table to stdout |
-| `ct install-hooks` | Register hooks in Claude settings (idempotent) |
+| `ct install-hooks` | Register hooks in `~/.claude/settings.json` |
 | `ct install-wrapper` | Add `claude()` wrapper to `~/.zshrc` |
 | `ct uninstall-wrapper` | Remove wrapper from `~/.zshrc` |
 
-## Dashboard Keybindings
+## How It Works
 
-| Key | Action |
-|---|---|
-| `j`/`k` or arrows | Navigate sessions |
-| `Enter` | Open session in right pane (or iTerm2 tab) |
-| `d` | Show session detail |
-| `r` | Refresh |
-| `q` | Quit dashboard |
-| `Ctrl+B h` | Switch focus between dashboard and terminal |
+**Hooks** fire on Claude lifecycle events (`SessionStart`, `Stop`, `PermissionRequest`, etc.) and write state files to `~/.claude-toolkits/state/`. The dashboard polls these files.
+
+**Shell wrapper** (`claude()` in `.zshrc`) starts each Claude session inside a tmux session on the `ct-sessions` socket. The dashboard switches between these sessions in-place.
+
+**Fallback** — sessions started without the wrapper fall back to iTerm2 tab activation. Sessions started before hooks were installed derive state from transcript files.
 
 ## Killing the Dashboard
 
@@ -76,4 +82,4 @@ tmux kill-session -t claude-dash
 - Python 3.11+
 - Claude Code >= 2.1.114
 - tmux (`brew install tmux`)
-- `jq` (for hook script)
+- jq (`brew install jq`)
