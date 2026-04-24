@@ -209,11 +209,35 @@ def cmd_dash(fullscreen: bool = False) -> None:
     os.execvp("bash", ["bash", str(launch_script)])
 
 
+def cmd_setup() -> None:
+    console = Console()
+    console.print("[bold]Setting up claude-toolkits...[/bold]\n")
+
+    console.print("[dim]1/3 Installing hooks...[/dim]")
+    cmd_install_hooks()
+    console.print()
+
+    console.print("[dim]2/3 Installing shell wrapper...[/dim]")
+    cmd_install_wrapper()
+    console.print()
+
+    console.print("[dim]3/3 Reloading shell...[/dim]")
+    import subprocess
+    subprocess.run(["zsh", "-c", f"source {ZSHRC}"], env={**__import__('os').environ})
+    console.print("[green]✓[/green] Shell reloaded")
+
+    console.print("\n[bold green]Setup complete.[/bold green]")
+    console.print("[dim]Close existing Claude sessions and reopen them for the wrapper to take effect.[/dim]")
+    console.print("[dim]Run 'ct dash' to start the dashboard.[/dim]")
+
+
 def main() -> None:
     args = sys.argv[1:]
 
     if not args or args[0] == "status":
         cmd_status()
+    elif args[0] == "setup":
+        cmd_setup()
     elif args[0] == "install-hooks":
         cmd_install_hooks()
     elif args[0] == "dash":
@@ -225,5 +249,5 @@ def main() -> None:
         cmd_uninstall_wrapper()
     else:
         print(f"Unknown command: {args[0]}")
-        print("Usage: ct [status|install-hooks|install-wrapper|uninstall-wrapper|dash [--fullscreen]]")
+        print("Usage: ct [setup|status|dash [--fullscreen]|install-hooks|install-wrapper|uninstall-wrapper]")
         sys.exit(1)
