@@ -11,6 +11,7 @@ STATE_ICONS = {
     SessionState.COOKING: "\U0001f525",
     SessionState.NEEDS_YOU: "\U0001f514",
     SessionState.RECENTLY_ACTIVE: "✅",
+    SessionState.SHELL: ">_",
     SessionState.STALE: "\U0001f4a4",
     SessionState.DEAD: "\U0001f480",
 }
@@ -19,6 +20,7 @@ STATE_HEADERS = {
     SessionState.COOKING: "COOKING",
     SessionState.NEEDS_YOU: "NEEDS YOU",
     SessionState.RECENTLY_ACTIVE: "RECENT",
+    SessionState.SHELL: "SHELL",
     SessionState.STALE: "STALE",
     SessionState.DEAD: "DEAD",
 }
@@ -27,6 +29,7 @@ STATE_STYLES = {
     SessionState.COOKING: "bold red",
     SessionState.NEEDS_YOU: "bold yellow",
     SessionState.RECENTLY_ACTIVE: "green",
+    SessionState.SHELL: "bold cyan",
     SessionState.STALE: "dim",
     SessionState.DEAD: "dim red",
 }
@@ -121,6 +124,7 @@ class SessionList(VerticalScroll):
             SessionState.COOKING,
             SessionState.NEEDS_YOU,
             SessionState.RECENTLY_ACTIVE,
+            SessionState.SHELL,
             SessionState.STALE,
             SessionState.DEAD,
         ]
@@ -153,8 +157,12 @@ class DashFooter(Static):
             key("q", "Quit")
             + key("r", "Refresh")
             + key("enter", "Open")
+            + key("n", "New Shell")
             + key("d", "Detail")
-            + key("ctrl+b h", "Exit Dashboard")
+        )
+        line2 = (
+            key("ctrl+b h", "Exit Dashboard")
+            + key("Cmd+Opt+drag", "Copy Text")
         )
         if self.paused:
             status = f"[bold]⏸ paused[/bold] │ {self.session_count} sessions"
@@ -162,5 +170,5 @@ class DashFooter(Static):
             status = f"Polling every {self.poll_interval:.0f}s │ {self.session_count} sessions"
         if self.dead_count > 0:
             status += f" │ {self.dead_count} dead"
-        line2 = f" {status}  │  " + key("Cmd+Opt+drag", "Copy Text")
-        return f"{line1}\n{line2}"
+        line3 = f" {status}"
+        return f"{line1}\n{line2}\n{line3}"

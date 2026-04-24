@@ -10,6 +10,7 @@ class SessionState(enum.Enum):
     COOKING = "cooking"
     NEEDS_YOU = "needs_you"
     RECENTLY_ACTIVE = "recently_active"
+    SHELL = "shell"
     STALE = "stale"
     DEAD = "dead"
 
@@ -31,11 +32,14 @@ class Session:
     away_summary: str | None = None
     source: str = "fallback"  # "hook" or "fallback"
     tmux_session_name: str | None = None
+    is_shell: bool = False
 
     @property
     def label(self) -> str:
         if self.name:
             return self.name
+        if self.is_shell and self.tmux_session_name:
+            return self.tmux_session_name
         if self.custom_title:
             return self.custom_title[:40]
         if self.away_summary:
