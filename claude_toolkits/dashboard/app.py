@@ -251,13 +251,23 @@ class DashboardApp(App[None]):
                 return True
             self._ct_client = None
 
-        if self._active_ct_session:
-            self._active_ct_session = None
-            self._ct_client = None
-
         right_pane = await self._get_right_pane_id()
         if not right_pane:
             return False
+
+        client = await self._get_ct_client(right_pane)
+        if client:
+            proc = await asyncio.create_subprocess_exec(
+                "tmux", "-L", "ct-sessions", "switch-client",
+                "-c", client, "-t", tmux_name,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await asyncio.wait_for(proc.communicate(), timeout=2)
+            if proc.returncode == 0:
+                self._ct_client = client
+                self._active_ct_session = tmux_name
+                return True
 
         cmd = f"TMUX= tmux -L ct-sessions attach -t {tmux_name}"
         proc = await asyncio.create_subprocess_exec(
