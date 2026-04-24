@@ -240,18 +240,22 @@ class DashboardApp(App[None]):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=2)
+            await asyncio.wait_for(proc.communicate(), timeout=2)
             if proc.returncode == 0:
                 self._active_ct_session = tmux_name
                 return
             self._ct_client = None
+
+        if self._active_ct_session:
+            self.notify("Lost connection to right pane", severity="warning")
+            return
 
         right_pane = await self._get_right_pane_id()
         if not right_pane:
             self.notify("Could not find right pane", severity="warning")
             return
 
-        cmd = f"tmux -L ct-sessions attach -t {tmux_name}"
+        cmd = f"TMUX= tmux -L ct-sessions attach -t {tmux_name}"
         proc = await asyncio.create_subprocess_exec(
             "tmux", "send-keys", "-t", right_pane, cmd, "Enter",
             stdout=asyncio.subprocess.PIPE,
@@ -260,36 +264,61 @@ class DashboardApp(App[None]):
         await asyncio.wait_for(proc.communicate(), timeout=2)
         self._active_ct_session = tmux_name
 
-        await asyncio.sleep(0.3)
-        self._ct_client = await self._get_ct_client()
+        await asyncio.sleep(0.5)
+        self._ct_client = await self._get_ct_client(right_pane)
 
     async def _get_right_pane_id(self) -> str | None:
         try:
             proc = await asyncio.create_subprocess_exec(
-                "tmux", "display-message", "-t", "claude-dash:0.1",
-                "-p", "#{pane_id}",
+                "tmux", "show-environment", "-t", "claude-dash", "DASH_PANE_ID",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=2)
-            pane_id = stdout.decode().strip()
-            return pane_id if pane_id else None
+            raw = stdout.decode().strip()
+            dash_pane = raw.split("=", 1)[1] if "=" in raw else ""
+            if not dash_pane:
+                return None
+
+            proc = await asyncio.create_subprocess_exec(
+                "tmux", "list-panes", "-t", "claude-dash",
+                "-F", "#{pane_id}",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=2)
+            panes = [p for p in stdout.decode().strip().splitlines() if p != dash_pane]
+            return panes[0] if panes else None
         except (asyncio.TimeoutError, OSError):
             return None
 
-    async def _get_ct_client(self) -> str | None:
+    async def _get_ct_client(self, right_pane: str) -> str | None:
         try:
             proc = await asyncio.create_subprocess_exec(
+                "tmux", "display-message", "-t", right_pane,
+                "-p", "#{pane_tty}",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=2)
+            right_tty = stdout.decode().strip()
+            if not right_tty:
+                return None
+
+            proc = await asyncio.create_subprocess_exec(
                 "tmux", "-L", "ct-sessions", "list-clients",
-                "-F", "#{client_name}",
+                "-F", "#{client_name} #{client_tty}",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=2)
             if proc.returncode != 0:
                 return None
-            clients = stdout.decode().strip().split("\n")
-            return clients[0] if clients and clients[0] else None
+            for line in stdout.decode().strip().splitlines():
+                parts = line.rsplit(" ", 1)
+                if len(parts) == 2 and parts[1] == right_tty:
+                    return parts[0]
+            return None
         except (asyncio.TimeoutError, OSError):
             return None
 

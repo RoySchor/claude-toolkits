@@ -94,7 +94,7 @@ def cmd_install_hooks() -> None:
 
     hooks = settings.setdefault("hooks", {})
     for event in ("SessionStart", "UserPromptSubmit", "Stop", "SessionEnd",
-                   "PermissionRequest", "Notification", "SubagentStart"):
+                   "PermissionRequest", "PreToolUse", "SubagentStart"):
         existing = hooks.get(event, [])
         already_installed = any(
             hook_command in json.dumps(rule)
@@ -119,19 +119,12 @@ WRAPPER_FUNCTION = r'''claude() {
     dir_slug=$(basename "$PWD" | tr -cd 'a-zA-Z0-9_-')
     local sess_name="ct-${dir_slug}-$$"
 
-    local cmd="command claude"
-    local arg
-    for arg in "$@"; do
-        cmd="$cmd '$(printf '%s' "$arg" | sed "s/'/'\\\\''/g")'"
-    done
-
     tmux -L ct-sessions new-session -d -s "$sess_name" \
         -x "$(tput cols)" -y "$(tput lines)" \
-        "$cmd"
+        "$(printf '%q ' command claude "$@")"
     tmux -L ct-sessions set -t "$sess_name" status off
     tmux -L ct-sessions set -t "$sess_name" prefix None
 
-    trap 'tmux -L ct-sessions kill-session -t "$sess_name" 2>/dev/null' EXIT
     tmux -L ct-sessions attach -t "$sess_name"
 }'''
 
