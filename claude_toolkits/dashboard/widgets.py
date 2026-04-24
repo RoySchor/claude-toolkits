@@ -161,8 +161,7 @@ class DashFooter(Static):
             + key("d", "Detail")
         )
         line2 = (
-            key("ctrl+b s", "Scroll")
-            + key("ctrl+b h", "Exit Dashboard")
+            key("ctrl+b h", "Exit Dashboard")
             + key("Cmd+Opt+drag", "Copy Text")
         )
         if self.paused:

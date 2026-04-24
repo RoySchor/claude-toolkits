@@ -101,7 +101,6 @@ class DashboardApp(App[None]):
         Binding("enter", "open_session", "Open", show=False),
         Binding("n", "new_shell", "New Shell", show=False),
         Binding("d", "detail", "Detail", show=False),
-        Binding("s", "scroll_session", "Scroll", show=False),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
         Binding("down", "cursor_down", "Down", show=False),
@@ -350,20 +349,6 @@ class DashboardApp(App[None]):
     def action_detail(self) -> None:
         if self._sessions and 0 <= self._selected_idx < len(self._sessions):
             self.push_screen(DetailModal(self._sessions[self._selected_idx]))
-
-    async def action_scroll_session(self) -> None:
-        if not self._active_ct_session:
-            self.notify("No active session to scroll", severity="warning")
-            return
-        proc = await asyncio.create_subprocess_exec(
-            "tmux", "-L", "ct-sessions", "copy-mode", "-u",
-            "-t", self._active_ct_session,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        await asyncio.wait_for(proc.communicate(), timeout=2)
-        if proc.returncode != 0:
-            self.notify("Could not enter scroll mode", severity="warning")
 
     async def action_new_shell(self) -> None:
         name = self._next_shell_name()

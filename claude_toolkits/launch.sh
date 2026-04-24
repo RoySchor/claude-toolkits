@@ -65,9 +65,6 @@ tmux bind-key Space run-shell '
 tmux set-option -t "$SESSION_NAME" focus-events on
 tmux set-option -t "$SESSION_NAME" mouse on
 
-# Ctrl+B s = enter scroll mode in the active ct-sessions session
-tmux bind-key s run-shell 'tmux -L ct-sessions copy-mode -u 2>/dev/null || true'
-
 # Ctrl+B h = switch focus between panes
 tmux bind-key h select-pane -t "{next}"
 
