@@ -76,6 +76,20 @@ class SessionScanner:
         self._prev_mtimes: dict[str, float] = {}
 
     @staticmethod
+    def _discover_all_ct_session_names() -> set[str]:
+        try:
+            result = subprocess.run(
+                ["tmux", "-L", "ct-sessions", "list-sessions",
+                 "-F", "#{session_name}"],
+                capture_output=True, text=True, timeout=2,
+            )
+            if result.returncode != 0:
+                return set()
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            return set()
+        return {line.strip() for line in result.stdout.strip().splitlines() if line.strip()}
+
+    @staticmethod
     def _discover_tmux_sessions() -> dict[int, str]:
         try:
             result = subprocess.run(
@@ -151,6 +165,18 @@ class SessionScanner:
                 )
                 self._apply_hook_state(session, state_data)
                 sessions.append(session)
+
+        claimed_tmux_names = {s.tmux_session_name for s in sessions if s.tmux_session_name}
+        all_ct_names = self._discover_all_ct_session_names()
+        for name in sorted(all_ct_names):
+            if name.startswith("shell-") and name not in claimed_tmux_names:
+                sessions.append(Session(
+                    session_id=f"tmux-shell-{name}",
+                    state=SessionState.SHELL,
+                    source="tmux",
+                    tmux_session_name=name,
+                    is_shell=True,
+                ))
 
         sessions.sort(key=lambda s: (self._state_sort_key(s.state), s.label.lower()))
         return sessions
@@ -278,7 +304,8 @@ class SessionScanner:
             SessionState.COOKING: 0,
             SessionState.NEEDS_YOU: 1,
             SessionState.RECENTLY_ACTIVE: 2,
-            SessionState.STALE: 3,
-            SessionState.DEAD: 4,
+            SessionState.SHELL: 3,
+            SessionState.STALE: 4,
+            SessionState.DEAD: 5,
         }
         return order.get(state, 5)

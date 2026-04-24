@@ -48,6 +48,8 @@ class DetailModal(ModalScreen[None]):
         lines.append("")
         if s.name:
             lines.append(f"Name: {s.name}")
+        if s.is_shell:
+            lines.append("Type: Shell")
         lines.append(f"State: {s.state.value}")
         lines.append(f"Source: {s.source}")
         if s.pid:
@@ -97,6 +99,7 @@ class DashboardApp(App[None]):
         Binding("q", "quit", "Quit", show=False),
         Binding("r", "refresh", "Refresh", show=False),
         Binding("enter", "open_session", "Open", show=False),
+        Binding("n", "new_shell", "New Shell", show=False),
         Binding("d", "detail", "Detail", show=False),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
@@ -325,6 +328,35 @@ class DashboardApp(App[None]):
     def action_detail(self) -> None:
         if self._sessions and 0 <= self._selected_idx < len(self._sessions):
             self.push_screen(DetailModal(self._sessions[self._selected_idx]))
+
+    async def action_new_shell(self) -> None:
+        name = self._next_shell_name()
+        proc = await asyncio.create_subprocess_exec(
+            "tmux", "-L", "ct-sessions", "new-session", "-d",
+            "-s", name, "-x", "200", "-y", "50",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await asyncio.wait_for(proc.communicate(), timeout=3)
+        if proc.returncode != 0:
+            self.notify("Failed to create shell session", severity="error")
+            return
+        for opt_args in [("status", "off"), ("prefix", "None")]:
+            p = await asyncio.create_subprocess_exec(
+                "tmux", "-L", "ct-sessions", "set", "-t", name, *opt_args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await asyncio.wait_for(p.communicate(), timeout=2)
+        await self._switch_ct_session(name)
+        self._do_scan()
+
+    def _next_shell_name(self) -> str:
+        existing = {s.tmux_session_name for s in self._sessions if s.is_shell}
+        n = 1
+        while f"shell-{n}" in existing:
+            n += 1
+        return f"shell-{n}"
 
     def action_quit(self) -> None:
         import subprocess

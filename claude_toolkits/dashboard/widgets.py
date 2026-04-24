@@ -11,6 +11,7 @@ STATE_ICONS = {
     SessionState.COOKING: "\U0001f525",
     SessionState.NEEDS_YOU: "\U0001f514",
     SessionState.RECENTLY_ACTIVE: "✅",
+    SessionState.SHELL: ">_",
     SessionState.STALE: "\U0001f4a4",
     SessionState.DEAD: "\U0001f480",
 }
@@ -19,6 +20,7 @@ STATE_HEADERS = {
     SessionState.COOKING: "COOKING",
     SessionState.NEEDS_YOU: "NEEDS YOU",
     SessionState.RECENTLY_ACTIVE: "RECENT",
+    SessionState.SHELL: "SHELL",
     SessionState.STALE: "STALE",
     SessionState.DEAD: "DEAD",
 }
@@ -27,6 +29,7 @@ STATE_STYLES = {
     SessionState.COOKING: "bold red",
     SessionState.NEEDS_YOU: "bold yellow",
     SessionState.RECENTLY_ACTIVE: "green",
+    SessionState.SHELL: "bold cyan",
     SessionState.STALE: "dim",
     SessionState.DEAD: "dim red",
 }
@@ -121,6 +124,7 @@ class SessionList(VerticalScroll):
             SessionState.COOKING,
             SessionState.NEEDS_YOU,
             SessionState.RECENTLY_ACTIVE,
+            SessionState.SHELL,
             SessionState.STALE,
             SessionState.DEAD,
         ]
@@ -153,6 +157,7 @@ class DashFooter(Static):
             key("q", "Quit")
             + key("r", "Refresh")
             + key("enter", "Open")
+            + key("n", "New Shell")
             + key("d", "Detail")
             + key("ctrl+b h", "Exit Dashboard")
         )

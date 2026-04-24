@@ -28,6 +28,7 @@ def cmd_status() -> None:
         SessionState.COOKING: "[bold red]🔥 COOKING[/bold red]",
         SessionState.NEEDS_YOU: "[bold yellow]🔔 NEEDS YOU[/bold yellow]",
         SessionState.RECENTLY_ACTIVE: "[green]✅ RECENT[/green]",
+        SessionState.SHELL: "[bold cyan]>_ SHELL[/bold cyan]",
         SessionState.STALE: "[dim]💤 STALE[/dim]",
         SessionState.DEAD: "[dim red]💀 DEAD[/dim red]",
     }
