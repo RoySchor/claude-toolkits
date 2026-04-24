@@ -120,6 +120,7 @@ class DashboardApp(App[None]):
         self._last_refresh: float = 0.0
         self._ct_client: str | None = None
         self._active_ct_session: str | None = None
+        self._pending_shell_names: set[str] = set()
         super().__init__()
 
     def compose(self) -> ComposeResult:
@@ -154,7 +155,7 @@ class DashboardApp(App[None]):
             return
 
         has_cooking = any(s.state == SessionState.COOKING for s in self._sessions)
-        all_stale = all(s.state in (SessionState.STALE, SessionState.DEAD) for s in self._sessions)
+        all_stale = all(s.state in (SessionState.STALE, SessionState.DEAD, SessionState.SHELL) for s in self._sessions)
 
         if has_cooking:
             new_interval = 3.0
@@ -223,7 +224,8 @@ class DashboardApp(App[None]):
         session = self._sessions[self._selected_idx]
 
         if session.tmux_session_name:
-            await self._switch_ct_session(session.tmux_session_name)
+            if not await self._switch_ct_session(session.tmux_session_name):
+                self.notify("Could not switch to session", severity="warning")
             return
 
         if not session.pid:
@@ -235,7 +237,7 @@ class DashboardApp(App[None]):
         if not await _activate_iterm_session(session.pid):
             self.notify("Could not find session in iTerm2", severity="warning")
 
-    async def _switch_ct_session(self, tmux_name: str) -> None:
+    async def _switch_ct_session(self, tmux_name: str) -> bool:
         if self._ct_client:
             proc = await asyncio.create_subprocess_exec(
                 "tmux", "-L", "ct-sessions", "switch-client",
@@ -246,7 +248,7 @@ class DashboardApp(App[None]):
             await asyncio.wait_for(proc.communicate(), timeout=2)
             if proc.returncode == 0:
                 self._active_ct_session = tmux_name
-                return
+                return True
             self._ct_client = None
 
         if self._active_ct_session:
@@ -255,8 +257,7 @@ class DashboardApp(App[None]):
 
         right_pane = await self._get_right_pane_id()
         if not right_pane:
-            self.notify("Could not find right pane", severity="warning")
-            return
+            return False
 
         cmd = f"TMUX= tmux -L ct-sessions attach -t {tmux_name}"
         proc = await asyncio.create_subprocess_exec(
@@ -269,6 +270,26 @@ class DashboardApp(App[None]):
 
         await asyncio.sleep(0.5)
         self._ct_client = await self._get_ct_client(right_pane)
+        return True
+
+    async def _get_right_pane_size(self) -> list[str]:
+        right_pane = await self._get_right_pane_id()
+        if not right_pane:
+            return ["-x", "120", "-y", "40"]
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "tmux", "display-message", "-t", right_pane,
+                "-p", "#{pane_width} #{pane_height}",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=2)
+            parts = stdout.decode().strip().split()
+            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                return ["-x", parts[0], "-y", parts[1]]
+        except (asyncio.TimeoutError, OSError):
+            pass
+        return ["-x", "120", "-y", "40"]
 
     async def _get_right_pane_id(self) -> str | None:
         try:
@@ -331,32 +352,40 @@ class DashboardApp(App[None]):
 
     async def action_new_shell(self) -> None:
         name = self._next_shell_name()
+        size_args = await self._get_right_pane_size()
         proc = await asyncio.create_subprocess_exec(
             "tmux", "-L", "ct-sessions", "new-session", "-d",
-            "-s", name, "-x", "200", "-y", "50",
+            "-s", name, *size_args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         await asyncio.wait_for(proc.communicate(), timeout=3)
         if proc.returncode != 0:
+            self._pending_shell_names.discard(name)
             self.notify("Failed to create shell session", severity="error")
             return
-        for opt_args in [("status", "off"), ("prefix", "None")]:
+        for opt_args in [("status", "off"), ("prefix", "C-@")]:
             p = await asyncio.create_subprocess_exec(
                 "tmux", "-L", "ct-sessions", "set", "-t", name, *opt_args,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
             await asyncio.wait_for(p.communicate(), timeout=2)
-        await self._switch_ct_session(name)
+        switched = await self._switch_ct_session(name)
+        self._pending_shell_names.discard(name)
+        if not switched:
+            self.notify("Shell created but could not switch to it", severity="warning")
         self._do_scan()
 
     def _next_shell_name(self) -> str:
         existing = {s.tmux_session_name for s in self._sessions if s.is_shell}
+        existing |= self._pending_shell_names
         n = 1
         while f"shell-{n}" in existing:
             n += 1
-        return f"shell-{n}"
+        name = f"shell-{n}"
+        self._pending_shell_names.add(name)
+        return name
 
     def action_quit(self) -> None:
         import subprocess

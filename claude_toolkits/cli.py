@@ -124,7 +124,7 @@ WRAPPER_FUNCTION = r'''claude() {
         -x "$(tput cols)" -y "$(tput lines)" \
         "$(printf '%q ' command claude "$@")"
     tmux -L ct-sessions set -t "$sess_name" status off
-    tmux -L ct-sessions set -t "$sess_name" prefix None
+    tmux -L ct-sessions set -t "$sess_name" prefix C-@
 
     tmux -L ct-sessions attach -t "$sess_name"
 }'''

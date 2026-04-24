@@ -76,21 +76,7 @@ class SessionScanner:
         self._prev_mtimes: dict[str, float] = {}
 
     @staticmethod
-    def _discover_all_ct_session_names() -> set[str]:
-        try:
-            result = subprocess.run(
-                ["tmux", "-L", "ct-sessions", "list-sessions",
-                 "-F", "#{session_name}"],
-                capture_output=True, text=True, timeout=2,
-            )
-            if result.returncode != 0:
-                return set()
-        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
-            return set()
-        return {line.strip() for line in result.stdout.strip().splitlines() if line.strip()}
-
-    @staticmethod
-    def _discover_tmux_sessions() -> dict[int, str]:
+    def _discover_tmux_sessions() -> tuple[dict[int, str], set[str]]:
         try:
             result = subprocess.run(
                 ["tmux", "-L", "ct-sessions", "list-panes", "-a",
@@ -98,25 +84,27 @@ class SessionScanner:
                 capture_output=True, text=True, timeout=2,
             )
             if result.returncode != 0:
-                return {}
+                return {}, set()
         except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
-            return {}
+            return {}, set()
 
         mapping: dict[int, str] = {}
+        all_names: set[str] = set()
         for line in result.stdout.strip().splitlines():
             parts = line.rsplit(" ", 1)
             if len(parts) == 2:
+                all_names.add(parts[0])
                 try:
                     mapping[int(parts[1])] = parts[0]
                 except ValueError:
                     continue
-        return mapping
+        return mapping, all_names
 
     def scan(self) -> list[Session]:
         self._transcript_index = build_transcript_index()
         session_files = load_session_files()
         hook_states = load_hook_states()
-        tmux_map = self._discover_tmux_sessions()
+        tmux_map, all_ct_names = self._discover_tmux_sessions()
 
         sessions: list[Session] = []
         seen_ids: set[str] = set()
@@ -167,7 +155,6 @@ class SessionScanner:
                 sessions.append(session)
 
         claimed_tmux_names = {s.tmux_session_name for s in sessions if s.tmux_session_name}
-        all_ct_names = self._discover_all_ct_session_names()
         for name in sorted(all_ct_names):
             if name.startswith("shell-") and name not in claimed_tmux_names:
                 sessions.append(Session(
