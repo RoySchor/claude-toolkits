@@ -30,6 +30,7 @@ class Session:
     custom_title: str | None = None
     away_summary: str | None = None
     source: str = "fallback"  # "hook" or "fallback"
+    tmux_session_name: str | None = None
 
     @property
     def label(self) -> str:

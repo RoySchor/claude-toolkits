@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -74,10 +75,34 @@ class SessionScanner:
         self._caches: dict[str, TranscriptCache] = {}
         self._prev_mtimes: dict[str, float] = {}
 
+    @staticmethod
+    def _discover_tmux_sessions() -> dict[int, str]:
+        try:
+            result = subprocess.run(
+                ["tmux", "-L", "ct-sessions", "list-panes", "-a",
+                 "-F", "#{session_name} #{pane_pid}"],
+                capture_output=True, text=True, timeout=2,
+            )
+            if result.returncode != 0:
+                return {}
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            return {}
+
+        mapping: dict[int, str] = {}
+        for line in result.stdout.strip().splitlines():
+            parts = line.rsplit(" ", 1)
+            if len(parts) == 2:
+                try:
+                    mapping[int(parts[1])] = parts[0]
+                except ValueError:
+                    continue
+        return mapping
+
     def scan(self) -> list[Session]:
         self._transcript_index = build_transcript_index()
         session_files = load_session_files()
         hook_states = load_hook_states()
+        tmux_map = self._discover_tmux_sessions()
 
         sessions: list[Session] = []
         seen_ids: set[str] = set()
@@ -99,6 +124,9 @@ class SessionScanner:
                 started_at=self._parse_started_at(raw.get("startedAt")),
                 transcript_path=self._transcript_index.get(sid),
             )
+
+            if pid and pid in tmux_map:
+                session.tmux_session_name = tmux_map[pid]
 
             if not alive:
                 session.state = SessionState.DEAD
@@ -140,6 +168,8 @@ class SessionScanner:
 
         if raw_state == "cooking":
             session.state = SessionState.COOKING
+        elif raw_state == "needs_input":
+            session.state = SessionState.NEEDS_YOU
         elif raw_state == "idle":
             if session.transcript_path and has_pending_tool_use(session.transcript_path):
                 session.state = SessionState.NEEDS_YOU
