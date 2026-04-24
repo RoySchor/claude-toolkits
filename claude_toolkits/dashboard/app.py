@@ -77,7 +77,7 @@ class DashboardApp(App[None]):
     }
     #dash-footer {
         dock: bottom;
-        height: 2;
+        height: 3;
         background: $panel;
         color: $text;
         padding: 0 1;

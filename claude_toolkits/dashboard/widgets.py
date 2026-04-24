@@ -159,7 +159,11 @@ class DashFooter(Static):
             + key("enter", "Open")
             + key("n", "New Shell")
             + key("d", "Detail")
+        )
+        line2 = (
+            key("j/k", "Navigate")
             + key("ctrl+b h", "Exit Dashboard")
+            + key("Cmd+Opt+drag", "Copy Text")
         )
         if self.paused:
             status = f"[bold]⏸ paused[/bold] │ {self.session_count} sessions"
@@ -167,5 +171,5 @@ class DashFooter(Static):
             status = f"Polling every {self.poll_interval:.0f}s │ {self.session_count} sessions"
         if self.dead_count > 0:
             status += f" │ {self.dead_count} dead"
-        line2 = f" {status}  │  " + key("Cmd+Opt+drag", "Copy Text")
-        return f"{line1}\n{line2}"
+        line3 = f" {status}"
+        return f"{line1}\n{line2}\n{line3}"
