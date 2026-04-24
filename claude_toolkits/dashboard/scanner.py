@@ -156,7 +156,7 @@ class SessionScanner:
 
         claimed_tmux_names = {s.tmux_session_name for s in sessions if s.tmux_session_name}
         for name in sorted(all_ct_names):
-            if name.startswith("shell-") and name not in claimed_tmux_names:
+            if not name.startswith("ct-") and name not in claimed_tmux_names:
                 sessions.append(Session(
                     session_id=f"tmux-shell-{name}",
                     state=SessionState.SHELL,

@@ -11,7 +11,7 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.screen import ModalScreen
 from textual.timer import Timer
-from textual.widgets import Header, Label, Static
+from textual.widgets import Header, Input, Label, Static
 
 from .models import Session, SessionState
 from .scanner import SessionScanner, STATE_DIR
@@ -65,6 +65,44 @@ class DetailModal(ModalScreen[None]):
 
         with Vertical(id="detail-box"):
             yield Label("\n".join(lines))
+
+
+class NameShellModal(ModalScreen[str]):
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+    ]
+
+    DEFAULT_CSS = """
+    NameShellModal {
+        align: center middle;
+    }
+    #name-box {
+        width: 50;
+        height: auto;
+        border: thick $accent;
+        background: $surface;
+        padding: 1 2;
+    }
+    """
+
+    def __init__(self, default_name: str) -> None:
+        self._default_name = default_name
+        super().__init__()
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="name-box"):
+            yield Label("Name for new shell (Enter to skip):")
+            yield Input(placeholder=self._default_name, id="shell-name-input")
+
+    def on_mount(self) -> None:
+        self.query_one("#shell-name-input", Input).focus()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        name = event.value.strip()
+        self.dismiss(name if name else self._default_name)
+
+    def action_cancel(self) -> None:
+        self.dismiss("")
 
 
 class DashboardApp(App[None]):
@@ -121,6 +159,7 @@ class DashboardApp(App[None]):
         self._ct_client: str | None = None
         self._active_ct_session: str | None = None
         self._pending_shell_names: set[str] = set()
+        self._pending_default_shell: str | None = None
         super().__init__()
 
     def compose(self) -> ComposeResult:
@@ -350,8 +389,21 @@ class DashboardApp(App[None]):
         if self._sessions and 0 <= self._selected_idx < len(self._sessions):
             self.push_screen(DetailModal(self._sessions[self._selected_idx]))
 
-    async def action_new_shell(self) -> None:
-        name = self._next_shell_name()
+    def action_new_shell(self) -> None:
+        default = self._next_shell_name()
+        self._pending_default_shell = default
+        self.push_screen(NameShellModal(default), callback=self._create_shell)
+
+    async def _create_shell(self, name: str) -> None:
+        default = self._pending_default_shell
+        self._pending_default_shell = None
+        if not name:
+            self._pending_shell_names.discard(default)
+            return
+        name = re.sub(r"[^a-zA-Z0-9_-]", "-", name)
+        if name != default:
+            self._pending_shell_names.discard(default)
+            self._pending_shell_names.add(name)
         size_args = await self._get_right_pane_size()
         proc = await asyncio.create_subprocess_exec(
             "tmux", "-L", "ct-sessions", "new-session", "-d",
