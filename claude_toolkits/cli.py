@@ -130,10 +130,10 @@ WRAPPER_FUNCTION = r'''claude() {
     tmux -L ct-sessions bind -T root WheelUpPane if-shell -Ft= '#{pane_in_mode}' 'send-keys -M' 'copy-mode -et='
     tmux -L ct-sessions bind -T root WheelDownPane send-keys -M
 
-    if [ -n "$TMUX" ]; then
+    if [ -n "$TMUX" ] && [[ "$TMUX" == *ct-sessions* ]]; then
         tmux -L ct-sessions switch-client -t "$sess_name"
     else
-        tmux -L ct-sessions attach -t "$sess_name"
+        TMUX= tmux -L ct-sessions attach -t "$sess_name"
     fi
 }'''
 
