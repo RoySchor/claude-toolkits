@@ -146,7 +146,20 @@ def cmd_install_wrapper() -> None:
     if ZSHRC.exists():
         content = ZSHRC.read_text()
         if WRAPPER_START in content:
-            console.print("[yellow]Wrapper already installed in ~/.zshrc[/yellow]")
+            start = content.index(WRAPPER_START)
+            end = content.index(WRAPPER_END) + len(WRAPPER_END)
+            while end < len(content) and content[end] == "\n":
+                end += 1
+            old_block = content[start:end]
+            new_block = f"{WRAPPER_START}\n{WRAPPER_FUNCTION}\n{WRAPPER_END}\n"
+            if old_block == new_block:
+                console.print("[green]✓[/green] Shell wrapper already up to date")
+                return
+            content = content[:start] + content[end:]
+            content = content.rstrip("\n") + "\n"
+            ZSHRC.write_text(content + f"\n{new_block}")
+            console.print("[green]✓[/green] Shell wrapper updated in ~/.zshrc")
+            console.print("[dim]Run: [bold]source ~/.zshrc[/bold] for the change to take effect.[/dim]")
             return
         if "claude()" in content or "function claude" in content:
             console.print(
