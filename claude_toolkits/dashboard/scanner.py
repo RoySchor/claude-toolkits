@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -15,6 +16,7 @@ CLAUDE_DIR = Path.home() / ".claude"
 SESSIONS_DIR = CLAUDE_DIR / "sessions"
 PROJECTS_DIR = CLAUDE_DIR / "projects"
 STATE_DIR = Path.home() / ".claude-toolkits" / "state"
+DEAD_PURGE_SECONDS = 30 * 60
 
 
 def is_alive(pid: int) -> bool:
@@ -40,15 +42,15 @@ def build_transcript_index() -> dict[str, Path]:
     return index
 
 
-def load_session_files() -> list[dict]:
-    sessions = []
+def load_session_files() -> list[tuple[dict, Path]]:
+    sessions: list[tuple[dict, Path]] = []
     if not SESSIONS_DIR.exists():
         return sessions
     for f in SESSIONS_DIR.iterdir():
         if f.suffix == ".json":
             try:
                 data = json.loads(f.read_text())
-                sessions.append(data)
+                sessions.append((data, f))
             except (json.JSONDecodeError, OSError):
                 continue
     return sessions
@@ -73,6 +75,7 @@ class SessionScanner:
     def __init__(self) -> None:
         self._transcript_index: dict[str, Path] = {}
         self._caches: dict[str, TranscriptCache] = {}
+        self._dead_since: dict[str, float] = {}
         self._prev_mtimes: dict[str, float] = {}
 
     @staticmethod
@@ -109,7 +112,7 @@ class SessionScanner:
         sessions: list[Session] = []
         seen_ids: set[str] = set()
 
-        for raw in session_files:
+        for raw, session_file in session_files:
             sid = raw.get("sessionId", "")
             if not sid:
                 continue
@@ -131,12 +134,20 @@ class SessionScanner:
                 session.tmux_session_name = tmux_map[pid]
 
             if not alive:
+                now = time.time()
+                if sid not in self._dead_since:
+                    self._dead_since[sid] = now
+                if now - self._dead_since[sid] > DEAD_PURGE_SECONDS:
+                    self._purge_session(sid, session_file)
+                    del self._dead_since[sid]
+                    continue
                 session.state = SessionState.DEAD
                 if sid in hook_states:
                     self._cleanup_state_file(sid)
                 sessions.append(session)
                 continue
 
+            self._dead_since.pop(sid, None)
             if sid in hook_states:
                 self._apply_hook_state(session, hook_states[sid])
             else:
@@ -264,6 +275,14 @@ class SessionScanner:
             state_file.unlink(missing_ok=True)
         except OSError:
             pass
+
+    @staticmethod
+    def _purge_session(session_id: str, session_file: Path) -> None:
+        try:
+            session_file.unlink(missing_ok=True)
+        except OSError:
+            pass
+        SessionScanner._cleanup_state_file(session_id)
 
     @staticmethod
     def _get_mtime(path: Path) -> float:
