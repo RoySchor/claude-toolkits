@@ -146,6 +146,12 @@ def cmd_install_wrapper() -> None:
     if ZSHRC.exists():
         content = ZSHRC.read_text()
         if WRAPPER_START in content:
+            if WRAPPER_END not in content:
+                console.print(
+                    "[red]Error: Found ct-wrapper start marker but not end marker in ~/.zshrc.\n"
+                    "Manually remove the broken block, then re-run ct install-wrapper.[/red]"
+                )
+                sys.exit(1)
             start = content.index(WRAPPER_START)
             end = content.index(WRAPPER_END) + len(WRAPPER_END)
             while end < len(content) and content[end] == "\n":
@@ -189,6 +195,12 @@ def cmd_uninstall_wrapper() -> None:
     if WRAPPER_START not in content:
         console.print("[dim]No ct-wrapper block found in ~/.zshrc — nothing to remove.[/dim]")
         return
+    if WRAPPER_END not in content:
+        console.print(
+            "[red]Error: Found ct-wrapper start marker but not end marker in ~/.zshrc.\n"
+            "Manually remove the broken block.[/red]"
+        )
+        sys.exit(1)
 
     start = content.index(WRAPPER_START)
     end = content.index(WRAPPER_END) + len(WRAPPER_END)
