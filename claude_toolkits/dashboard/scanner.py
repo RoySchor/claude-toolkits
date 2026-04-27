@@ -75,6 +75,7 @@ class SessionScanner:
     def __init__(self) -> None:
         self._transcript_index: dict[str, Path] = {}
         self._caches: dict[str, TranscriptCache] = {}
+        self._dead_since: dict[str, float] = {}
         self._prev_mtimes: dict[str, float] = {}
 
     @staticmethod
@@ -133,9 +134,12 @@ class SessionScanner:
                 session.tmux_session_name = tmux_map[pid]
 
             if not alive:
-                file_age = time.time() - self._get_mtime(session_file)
-                if file_age > DEAD_PURGE_SECONDS:
+                now = time.time()
+                if sid not in self._dead_since:
+                    self._dead_since[sid] = now
+                if now - self._dead_since[sid] > DEAD_PURGE_SECONDS:
                     self._purge_session(sid, session_file)
+                    del self._dead_since[sid]
                     continue
                 session.state = SessionState.DEAD
                 if sid in hook_states:
@@ -143,6 +147,7 @@ class SessionScanner:
                 sessions.append(session)
                 continue
 
+            self._dead_since.pop(sid, None)
             if sid in hook_states:
                 self._apply_hook_state(session, hook_states[sid])
             else:
