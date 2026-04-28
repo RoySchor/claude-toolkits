@@ -167,7 +167,11 @@ def cmd_install_wrapper() -> None:
             console.print("[green]✓[/green] Shell wrapper updated in ~/.zshrc")
             console.print("[dim]Run: [bold]source ~/.zshrc[/bold] for the change to take effect.[/dim]")
             return
-        if "claude()" in content or "function claude" in content:
+        if any(
+            ("claude()" in line or "function claude" in line)
+            for line in content.splitlines()
+            if not line.lstrip().startswith("#")
+        ):
             console.print(
                 "[red]Error: An existing claude() function or alias found in ~/.zshrc.\n"
                 "Remove it first, then re-run ct install-wrapper.[/red]"
