@@ -118,7 +118,13 @@ WRAPPER_END = "# <<< ct-wrapper <<<"
 WRAPPER_FUNCTION = r'''claude() {
     local dir_slug
     dir_slug=$(basename "$PWD" | tr -cd 'a-zA-Z0-9_-')
-    local sess_name="ct-${dir_slug}-$$"
+    local base_name="ct-${dir_slug}-$$"
+    local sess_name="$base_name"
+    local i=2
+    while tmux -L ct-sessions has-session -t "$sess_name" 2>/dev/null; do
+        sess_name="${base_name}-${i}"
+        ((i++))
+    done
 
     tmux -L ct-sessions new-session -d -s "$sess_name" \
         -x "$(tput cols)" -y "$(tput lines)" \
