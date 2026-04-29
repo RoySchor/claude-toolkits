@@ -43,17 +43,26 @@ def build_transcript_index() -> dict[str, Path]:
 
 
 def load_session_files() -> list[tuple[dict, Path]]:
-    sessions: list[tuple[dict, Path]] = []
+    by_sid: dict[str, tuple[dict, Path]] = {}
     if not SESSIONS_DIR.exists():
-        return sessions
+        return []
     for f in SESSIONS_DIR.iterdir():
         if f.suffix == ".json":
             try:
                 data = json.loads(f.read_text())
-                sessions.append((data, f))
             except (json.JSONDecodeError, OSError):
                 continue
-    return sessions
+            sid = data.get("sessionId", "")
+            if not sid:
+                continue
+            if sid in by_sid:
+                existing_pid = by_sid[sid][0].get("pid", 0)
+                new_pid = data.get("pid", 0)
+                if (new_pid or 0) > (existing_pid or 0):
+                    by_sid[sid] = (data, f)
+            else:
+                by_sid[sid] = (data, f)
+    return list(by_sid.values())
 
 
 def load_hook_states() -> dict[str, dict]:
@@ -114,7 +123,7 @@ class SessionScanner:
 
         for raw, session_file in session_files:
             sid = raw.get("sessionId", "")
-            if not sid:
+            if not sid or sid in seen_ids:
                 continue
             seen_ids.add(sid)
 
