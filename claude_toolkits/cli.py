@@ -70,7 +70,7 @@ def cmd_install_hooks() -> None:
     console = Console()
 
     if not shutil.which("jq"):
-        console.print("[red]Error: jq is required but not found. Install with: brew install jq[/red]")
+        console.print("[red]Error: jq is required but not found. Install with your package manager (e.g. brew install jq, apt install jq)[/red]")
         sys.exit(1)
 
     install_dir = STATE_TRACKER_INSTALL_PATH.parent
