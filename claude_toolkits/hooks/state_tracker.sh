@@ -17,6 +17,12 @@ if [ -z "$SESSION_ID" ] || [ -z "$EVENT" ]; then
     exit 0
 fi
 
+# Sanitize SESSION_ID to prevent path traversal
+SESSION_ID=$(echo "$SESSION_ID" | tr -cd 'a-zA-Z0-9_-')
+if [ -z "$SESSION_ID" ]; then
+    exit 0
+fi
+
 case "$EVENT" in
     "SessionStart")
         STATE="idle"

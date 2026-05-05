@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -67,6 +68,10 @@ def cmd_status() -> None:
 
 def cmd_install_hooks() -> None:
     console = Console()
+
+    if not shutil.which("jq"):
+        console.print("[red]Error: jq is required but not found. Install with: brew install jq[/red]")
+        sys.exit(1)
 
     install_dir = STATE_TRACKER_INSTALL_PATH.parent
     install_dir.mkdir(parents=True, exist_ok=True)
@@ -228,7 +233,6 @@ def cmd_uninstall_wrapper() -> None:
 
 def cmd_dash(fullscreen: bool = False) -> None:
     import os
-    import shutil
 
     has_tmux = bool(shutil.which("tmux"))
 
