@@ -19,6 +19,52 @@ Close any existing Claude sessions and reopen them so they start under the wrapp
 ct dash
 ```
 
+## Troubleshooting
+
+<details>
+<summary><code>pip install -e .</code> fails with Python 2.7 warning or "setup.py not found"</summary>
+
+Your `pip` is pointing to Python 2. Use `pip3` instead:
+
+```bash
+pip3 install -e .
+```
+
+Or explicitly:
+
+```bash
+python3 -m pip install -e .
+```
+
+</details>
+
+<details>
+<summary><code>ct: command not found</code> after install</summary>
+
+The `ct` binary may not be on your PATH. Try:
+
+```bash
+python3 -m pip install -e .
+# Then ensure your Python bin directory is in PATH:
+export PATH="$(python3 -m site --user-base)/bin:$PATH"
+```
+
+If using asdf/pyenv, run `asdf reshim python` or `pyenv rehash` after install.
+
+</details>
+
+<details>
+<summary><code>ModuleNotFoundError: No module named 'claude_toolkits'</code></summary>
+
+The editable install points to the repo directory. If you moved the repo after installing, re-run from the new location:
+
+```bash
+cd /path/to/claude-toolkits
+pip3 install -e .
+```
+
+</details>
+
 ## What It Does
 
 The dashboard runs as a tmux sidebar alongside your terminal. It shows all your Claude sessions grouped by state, lets you switch between them instantly, and supports trackpad scrollback.
