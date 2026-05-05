@@ -2,8 +2,6 @@
 
 Terminal dashboard for monitoring concurrent Claude Code sessions.
 
-![Dashboard](https://img.shields.io/badge/TUI-Textual-blue) ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
-
 ## Quick Start
 
 ```bash
