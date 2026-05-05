@@ -147,7 +147,7 @@ class SessionScanner:
                 if sid not in self._dead_since:
                     self._dead_since[sid] = now
                 if now - self._dead_since[sid] > DEAD_PURGE_SECONDS:
-                    self._purge_session(sid, session_file)
+                    self._cleanup_state_file(sid)
                     del self._dead_since[sid]
                     continue
                 session.state = SessionState.DEAD
@@ -284,14 +284,6 @@ class SessionScanner:
             state_file.unlink(missing_ok=True)
         except OSError:
             pass
-
-    @staticmethod
-    def _purge_session(session_id: str, session_file: Path) -> None:
-        try:
-            session_file.unlink(missing_ok=True)
-        except OSError:
-            pass
-        SessionScanner._cleanup_state_file(session_id)
 
     @staticmethod
     def _get_mtime(path: Path) -> float:
