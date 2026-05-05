@@ -144,11 +144,13 @@ class SessionScanner:
 
             if not alive:
                 now = time.time()
+                if self._dead_since.get(sid) == float('inf'):
+                    continue
                 if sid not in self._dead_since:
                     self._dead_since[sid] = now
                 if now - self._dead_since[sid] > DEAD_PURGE_SECONDS:
                     self._cleanup_state_file(sid)
-                    del self._dead_since[sid]
+                    self._dead_since[sid] = float('inf')
                     continue
                 session.state = SessionState.DEAD
                 if sid in hook_states:
