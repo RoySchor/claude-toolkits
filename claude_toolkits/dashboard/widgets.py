@@ -1,11 +1,30 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.reactive import reactive
 from textual.widgets import Label, Static
 
 from .models import Session, SessionState
+
+
+def shorten_path(cwd: str) -> str:
+    if not cwd:
+        return "(no directory)"
+    cwd = cwd.rstrip("/")
+    home = str(Path.home())
+    if cwd.startswith(home):
+        cwd = "~" + cwd[len(home):]
+    return cwd
+
+
+def group_by_directory(sessions: list[Session]) -> list[tuple[str, list[Session]]]:
+    groups: dict[str, list[Session]] = {}
+    for s in sessions:
+        groups.setdefault((s.cwd or "").rstrip("/"), []).append(s)
+    return list(groups.items())
 
 STATE_ICONS = {
     SessionState.COOKING: "\U0001f525",
@@ -66,12 +85,12 @@ class SessionItem(Static):
             else:
                 age_str = f" [dim]{hours / 24:.0f}d[/dim]"
 
-        marker = "▸ " if self.has_class("--selected") else "  "
+        marker = "    ▸ " if self.has_class("--selected") else "      "
         yield Label(f"{marker}{label}{age_str}")
 
         summary = self._get_summary()
         if summary:
-            yield Label(f"    [dim italic]{summary}[/dim italic]")
+            yield Label(f"        [dim italic]{summary}[/dim italic]")
 
     def _get_summary(self) -> str | None:
         s = self.session
@@ -106,9 +125,15 @@ class SessionBucket(Static):
 
         yield Label(f"[{style}]{icon} {header} ({count})[/{style}]")
 
-        for i, session in enumerate(self.sessions):
-            global_idx = self._start_idx + i
-            yield SessionItem(session, selected=(global_idx == self._selected_idx))
+        dir_groups = group_by_directory(self.sessions)
+        local_idx = 0
+        for cwd_raw, group_sessions in dir_groups:
+            dir_label = shorten_path(cwd_raw)
+            yield Label(f"  [dim]{dir_label}[/dim]")
+            for session in group_sessions:
+                global_idx = self._start_idx + local_idx
+                yield SessionItem(session, selected=(global_idx == self._selected_idx))
+                local_idx += 1
 
 
 class SessionList(VerticalScroll):
