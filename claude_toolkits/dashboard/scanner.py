@@ -86,6 +86,7 @@ class SessionScanner:
         self._caches: dict[str, TranscriptCache] = {}
         self._dead_since: dict[str, float] = {}
         self._prev_mtimes: dict[str, float] = {}
+        self._first_cwd: dict[str, str] = {}
 
     @staticmethod
     def _discover_tmux_sessions() -> tuple[dict[int, str], set[str]]:
@@ -150,6 +151,7 @@ class SessionScanner:
                     self._dead_since[sid] = now
                 if now - self._dead_since[sid] > DEAD_PURGE_SECONDS:
                     self._cleanup_state_file(sid)
+                    self._first_cwd.pop(sid, None)
                     self._dead_since[sid] = float('inf')
                     continue
                 session.state = SessionState.DEAD
@@ -168,9 +170,12 @@ class SessionScanner:
 
         for sid, state_data in hook_states.items():
             if sid not in seen_ids:
+                cwd = state_data.get("cwd", "")
+                if sid not in self._first_cwd:
+                    self._first_cwd[sid] = cwd
                 session = Session(
                     session_id=sid,
-                    cwd=state_data.get("cwd", ""),
+                    cwd=self._first_cwd[sid],
                     source="hook",
                 )
                 self._apply_hook_state(session, state_data)
