@@ -192,7 +192,7 @@ class SessionScanner:
                     is_shell=True,
                 ))
 
-        sessions.sort(key=lambda s: (self._state_sort_key(s.state), s.label.lower()))
+        sessions.sort(key=lambda s: (self._state_sort_key(s.state), (s.cwd or "").rstrip("/"), s.label.lower()))
         return sessions
 
     def _apply_hook_state(self, session: Session, state_data: dict) -> None:
