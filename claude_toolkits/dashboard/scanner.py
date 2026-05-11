@@ -151,6 +151,7 @@ class SessionScanner:
                     self._dead_since[sid] = now
                 if now - self._dead_since[sid] > DEAD_PURGE_SECONDS:
                     self._cleanup_state_file(sid)
+                    self._first_cwd.pop(sid, None)
                     self._dead_since[sid] = float('inf')
                     continue
                 session.state = SessionState.DEAD
