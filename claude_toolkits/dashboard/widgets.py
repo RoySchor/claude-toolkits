@@ -15,7 +15,9 @@ def shorten_path(cwd: str) -> str:
         return "(no directory)"
     cwd = cwd.rstrip("/")
     home = str(Path.home())
-    if cwd.startswith(home):
+    if cwd == home:
+        cwd = "~"
+    elif cwd.startswith(home + "/"):
         cwd = "~" + cwd[len(home):]
     return cwd
 
