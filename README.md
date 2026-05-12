@@ -82,32 +82,14 @@ Each Claude session runs inside an invisible tmux layer (`ct-sessions`). The das
 | STALE | Idle > 12h |
 | DEAD | Process exited |
 
-## Dashboard Keys
-
-| Key | Action |
-|---|---|
-| `Enter` | Switch to selected session |
-| `n` | Open a new shell session |
-| `d` | Show session detail |
-| `r` | Refresh |
-| `q` | Quit |
-| Arrows | Navigate sessions |
-| Trackpad scroll | Scrollback in active session |
-| `Ctrl+B h` | Switch focus between dashboard and terminal |
-| `Ctrl+B Space` | Toggle dashboard sidebar visibility |
-| `Cmd+Opt+drag` | Copy text (bypasses tmux mouse capture) |
-
 ## Commands
 
 | Command | Description |
 |---|---|
 | `ct setup` | One-time setup (hooks + shell wrapper) |
 | `ct dash` | Launch dashboard |
-| `ct dash --fullscreen` | Dashboard without tmux sidebar |
-| `ct status` | Print session table to stdout |
-| `ct install-hooks` | Register hooks in `~/.claude/settings.json` |
-| `ct install-wrapper` | Add `claude()` wrapper to `~/.zshrc` |
 | `ct uninstall-wrapper` | Remove wrapper from `~/.zshrc` |
+| `R` (Shift+R) | Spawn adversarial PR review session for highlighted session |
 
 ## How It Works
 
@@ -123,9 +105,3 @@ Each Claude session runs inside an invisible tmux layer (`ct-sessions`). The das
 tmux kill-session -t claude-dash
 ```
 
-## Requirements
-
-- Python 3.11+
-- Claude Code >= 2.1.114
-- tmux (`brew install tmux`)
-- jq (`brew install jq`)

@@ -186,11 +186,10 @@ class DashFooter(Static):
             + key("enter", "Open")
             + key("n", "New Shell")
             + key("d", "Detail")
-            + key("R", "Review")
+            + key("R", "PR Review")
         )
         line2 = (
-            key("ctrl+b h", "Exit Dashboard")
-            + key("Cmd+Opt+drag", "Copy Text")
+            key("Cmd+Opt+drag", "Copy Text")
         )
         if self.paused:
             status = f"[bold]⏸ paused[/bold] │ {self.session_count} sessions"
