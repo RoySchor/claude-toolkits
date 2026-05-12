@@ -179,6 +179,21 @@ class SessionScanner:
 
         for sid, state_data in hook_states.items():
             if sid not in seen_ids:
+                pid = state_data.get("pid")
+                alive = is_alive(pid) if pid else False
+
+                if not alive:
+                    now = time.time()
+                    if self._dead_since.get(sid) == float('inf'):
+                        continue
+                    if sid not in self._dead_since:
+                        self._dead_since[sid] = now
+                    if now - self._dead_since[sid] > DEAD_PURGE_SECONDS:
+                        self._cleanup_state_file(sid)
+                        self._first_cwd.pop(sid, None)
+                        self._dead_since[sid] = float('inf')
+                        continue
+
                 cwd = state_data.get("cwd", "")
                 if sid not in self._first_cwd:
                     self._first_cwd[sid] = cwd
@@ -187,6 +202,12 @@ class SessionScanner:
                     cwd=self._first_cwd[sid],
                     source="hook",
                 )
+
+                if not alive:
+                    session.state = SessionState.DEAD
+                    sessions.append(session)
+                    continue
+
                 self._apply_hook_state(session, state_data)
                 sessions.append(session)
 
