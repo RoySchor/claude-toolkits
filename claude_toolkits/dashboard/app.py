@@ -527,12 +527,15 @@ class DashboardApp(App[None]):
             return
         self.push_screen(
             ConfirmReviewModal(session.label),
-            callback=lambda confirmed: self._handle_review_confirm(confirmed, session),
+            callback=lambda confirmed: self._on_review_confirmed(confirmed, session),
         )
 
-    async def _handle_review_confirm(self, confirmed: bool, session: Session) -> None:
+    def _on_review_confirmed(self, confirmed: bool, session: Session) -> None:
         if not confirmed:
             return
+        asyncio.ensure_future(self._handle_review_confirm(session))
+
+    async def _handle_review_confirm(self, session: Session) -> None:
         cwd = session.cwd or ""
         pr_url = await asyncio.to_thread(discover_pr, cwd) if cwd else None
 
@@ -541,18 +544,32 @@ class DashboardApp(App[None]):
         else:
             self.push_screen(
                 ReviewChoiceModal(),
-                callback=lambda choice: self._handle_review_choice(session, choice),
+                callback=lambda choice: self._on_review_choice(session, choice),
             )
 
-    async def _handle_review_choice(self, session: Session, choice: str) -> None:
+    def _on_review_choice(self, session: Session, choice: str) -> None:
         if not choice:
             return
-        pr_url = choice if choice != "local" else None
-        await self._spawn_review(session, pr_url)
+        asyncio.ensure_future(self._spawn_review(session, choice if choice != "local" else None))
 
     async def _spawn_review(self, session: Session, pr_url: str | None) -> None:
-        raw_name = f"REVIEW-{session.label}"
-        review_name = re.sub(r"[^a-zA-Z0-9_-]", "-", raw_name)
+        base_name = re.sub(r"[^a-zA-Z0-9_-]", "-", f"REVIEW-{session.label}")
+        review_name = base_name
+        # Find next available name if session already exists
+        try:
+            existing = await asyncio.create_subprocess_exec(
+                "tmux", "-L", "ct-sessions", "list-sessions", "-F", "#{session_name}",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            )
+            out, _ = await asyncio.wait_for(existing.communicate(), timeout=2)
+            existing_names = set(out.decode().strip().splitlines()) if existing.returncode == 0 else set()
+        except (asyncio.TimeoutError, OSError):
+            existing_names = set()
+        if review_name in existing_names:
+            n = 2
+            while re.sub(r"[^a-zA-Z0-9_-]", "-", f"REVIEW-{n}-{session.label}") in existing_names and n < 100:
+                n += 1
+            review_name = re.sub(r"[^a-zA-Z0-9_-]", "-", f"REVIEW-{n}-{session.label}")
         cwd = session.cwd or str(Path.home())
 
         transcript_path = session.transcript_path or find_transcript(session.session_id)
@@ -574,14 +591,19 @@ class DashboardApp(App[None]):
         cmd = f'claude "Read and execute the review instructions in {safe_path}" ; rm -f {safe_path}'
 
         size_args = await self._get_right_pane_size()
-        proc = await asyncio.create_subprocess_exec(
-            "tmux", "-L", "ct-sessions", "new-session", "-d",
-            "-s", review_name, *size_args, "-c", cwd,
-            "bash", "-c", cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        await asyncio.wait_for(proc.communicate(), timeout=5)
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "tmux", "-L", "ct-sessions", "new-session", "-d",
+                "-s", review_name, *size_args, "-c", cwd,
+                "bash", "-c", cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await asyncio.wait_for(proc.communicate(), timeout=5)
+        except (asyncio.TimeoutError, OSError):
+            self.notify("Failed to create review session", severity="error")
+            brief_file.unlink(missing_ok=True)
+            return
         if proc.returncode != 0:
             self.notify("Failed to create review session", severity="error")
             brief_file.unlink(missing_ok=True)

@@ -142,6 +142,15 @@ class SessionScanner:
 
             if pid and pid in tmux_map:
                 session.tmux_session_name = tmux_map[pid]
+            elif pid:
+                try:
+                    proc = psutil.Process(pid)
+                    for ancestor in proc.parents():
+                        if ancestor.pid in tmux_map:
+                            session.tmux_session_name = tmux_map[ancestor.pid]
+                            break
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
 
             if not alive:
                 now = time.time()

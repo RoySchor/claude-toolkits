@@ -20,6 +20,8 @@ def _truncate(text: str, limit: int = 300) -> str:
     if len(text) <= limit:
         return text
     truncated = text[:limit].rsplit(" ", 1)[0]
+    if not truncated:
+        truncated = text[:limit]
     return truncated + "…"
 
 
@@ -131,6 +133,13 @@ def build_review_brief(
         "may have been too close to the problem."
     )
     sections.append("")
+    sections.append(
+        "**SCOPE: Review ONLY the diff/changes shown in the PR or branch. "
+        "Do NOT review the rest of the repository. Do NOT comment on pre-existing "
+        "code that was not modified in this diff. Every finding must reference a "
+        "specific line or hunk from the diff.**"
+    )
+    sections.append("")
 
     if pr_url:
         sections.append("## PR to Review")
@@ -171,10 +180,11 @@ def build_review_brief(
 
     sections.append("")
     sections.append("## Your Task")
-    sections.append("1. Read the PR diff (or local changes)")
-    sections.append("2. Identify bugs, edge cases, security issues, or incorrect assumptions")
+    sections.append("1. Read the PR diff (or local changes) — this is your ONLY review scope")
+    sections.append("2. Identify bugs, edge cases, security issues, or incorrect assumptions IN THE DIFF")
     sections.append("3. Check that the implementation matches what was asked")
     sections.append("4. Look for things the original author might have missed or gotten wrong")
-    sections.append("5. Summarize your findings clearly")
+    sections.append("5. Do NOT review or comment on code that was not changed in the diff")
+    sections.append("6. Summarize your findings clearly, referencing specific changed lines")
 
     return "\n".join(sections)
