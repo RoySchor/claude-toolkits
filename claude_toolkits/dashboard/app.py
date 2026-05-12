@@ -3,7 +3,10 @@ from __future__ import annotations
 import asyncio
 import platform
 import re
+import shlex
+import tempfile
 from datetime import datetime, timezone
+from pathlib import Path
 from time import monotonic
 
 from textual.app import App, ComposeResult
@@ -14,6 +17,7 @@ from textual.timer import Timer
 from textual.widgets import Header, Input, Label, Static
 
 from .models import Session, SessionState
+from .review import build_review_brief, discover_pr, find_transcript
 from .scanner import SessionScanner, STATE_DIR
 from .widgets import DashFooter, SessionList
 
@@ -105,6 +109,86 @@ class NameShellModal(ModalScreen[str]):
         self.dismiss("")
 
 
+class ConfirmReviewModal(ModalScreen[bool]):
+    BINDINGS = [
+        Binding("y", "confirm", "Yes"),
+        Binding("n", "cancel", "No"),
+        Binding("escape", "cancel", "Cancel"),
+    ]
+
+    DEFAULT_CSS = """
+    ConfirmReviewModal {
+        align: center middle;
+    }
+    #confirm-box {
+        width: 50;
+        height: auto;
+        border: thick $accent;
+        background: $surface;
+        padding: 1 2;
+    }
+    """
+
+    def __init__(self, session_name: str) -> None:
+        self._session_name = session_name
+        super().__init__()
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="confirm-box"):
+            yield Label(f"Review session [bold]{self._session_name}[/bold]?")
+            yield Label("")
+            yield Label("[dim]y[/dim] Yes  [dim]n[/dim] No")
+
+    def action_confirm(self) -> None:
+        self.dismiss(True)
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
+
+class ReviewChoiceModal(ModalScreen[str]):
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+    ]
+
+    DEFAULT_CSS = """
+    ReviewChoiceModal {
+        align: center middle;
+    }
+    #choice-box {
+        width: 60;
+        height: auto;
+        border: thick $accent;
+        background: $surface;
+        padding: 1 2;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="choice-box"):
+            yield Label("No open PR found for this session's branch.")
+            yield Label("")
+            yield Label("Paste a PR URL, or press Enter for local changes:")
+            yield Input(placeholder="PR URL or Enter for local", id="pr-url-input")
+            yield Label("[dim]Escape to cancel[/dim]")
+
+    def on_mount(self) -> None:
+        self.query_one("#pr-url-input", Input).focus()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        value = event.value.strip()
+        if not value:
+            self.dismiss("local")
+        elif value.startswith(("http://", "https://")):
+            self.dismiss(value)
+        else:
+            self.query_one("#pr-url-input", Input).value = ""
+            self.notify("Enter a valid URL (https://...) or press Enter for local", severity="warning")
+
+    def action_cancel(self) -> None:
+        self.dismiss("")
+
+
 class DashboardApp(App[None]):
     CSS = """
     Screen {
@@ -139,6 +223,7 @@ class DashboardApp(App[None]):
         Binding("enter", "open_session", "Open", show=False),
         Binding("n", "new_shell", "New Shell", show=False),
         Binding("d", "detail", "Detail", show=False),
+        Binding("R", "review", "Review", show=False),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
         Binding("down", "cursor_down", "Down", show=False),
@@ -426,6 +511,114 @@ class DashboardApp(App[None]):
             self._pending_shell_names.discard(name)
             self.notify("Failed to create shell session", severity="error")
             return
+        await self._apply_ct_session_options(name)
+        switched = await self._switch_ct_session(name)
+        self._pending_shell_names.discard(name)
+        if not switched:
+            self.notify("Shell created but could not switch to it", severity="warning")
+        self._do_scan()
+
+    def action_review(self) -> None:
+        if not self._sessions or not (0 <= self._selected_idx < len(self._sessions)):
+            return
+        session = self._sessions[self._selected_idx]
+        if session.state == SessionState.DEAD:
+            self.notify("Cannot review a dead session", severity="warning")
+            return
+        self.push_screen(
+            ConfirmReviewModal(session.label),
+            callback=lambda confirmed: self._on_review_confirmed(confirmed, session),
+        )
+
+    def _on_review_confirmed(self, confirmed: bool, session: Session) -> None:
+        if not confirmed:
+            return
+        asyncio.ensure_future(self._handle_review_confirm(session))
+
+    async def _handle_review_confirm(self, session: Session) -> None:
+        cwd = session.cwd or ""
+        pr_url = await asyncio.to_thread(discover_pr, cwd) if cwd else None
+
+        if pr_url:
+            await self._spawn_review(session, pr_url)
+        else:
+            self.push_screen(
+                ReviewChoiceModal(),
+                callback=lambda choice: self._on_review_choice(session, choice),
+            )
+
+    def _on_review_choice(self, session: Session, choice: str) -> None:
+        if not choice:
+            return
+        asyncio.ensure_future(self._spawn_review(session, choice if choice != "local" else None))
+
+    async def _spawn_review(self, session: Session, pr_url: str | None) -> None:
+        base_name = re.sub(r"[^a-zA-Z0-9_-]", "-", f"REVIEW-{session.label}")
+        review_name = base_name
+        # Find next available name if session already exists
+        try:
+            existing = await asyncio.create_subprocess_exec(
+                "tmux", "-L", "ct-sessions", "list-sessions", "-F", "#{session_name}",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            )
+            out, _ = await asyncio.wait_for(existing.communicate(), timeout=2)
+            existing_names = set(out.decode().strip().splitlines()) if existing.returncode == 0 else set()
+        except (asyncio.TimeoutError, OSError):
+            existing_names = set()
+        if review_name in existing_names:
+            n = 2
+            while re.sub(r"[^a-zA-Z0-9_-]", "-", f"REVIEW-{n}-{session.label}") in existing_names and n < 100:
+                n += 1
+            review_name = re.sub(r"[^a-zA-Z0-9_-]", "-", f"REVIEW-{n}-{session.label}")
+        cwd = session.cwd or str(Path.home())
+
+        transcript_path = session.transcript_path or find_transcript(session.session_id)
+        brief = build_review_brief(
+            session_name=session.label,
+            cwd=cwd,
+            pr_url=pr_url,
+            transcript_path=transcript_path,
+            away_summary=session.away_summary,
+        )
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".md", prefix="review-brief-", delete=False
+        ) as f:
+            f.write(brief)
+            brief_file = Path(f.name)
+
+        safe_path = shlex.quote(str(brief_file))
+        cmd = f'claude "Read and execute the review instructions in {safe_path}" ; rm -f {safe_path}'
+
+        size_args = await self._get_right_pane_size()
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "tmux", "-L", "ct-sessions", "new-session", "-d",
+                "-s", review_name, *size_args, "-c", cwd,
+                "bash", "-c", cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await asyncio.wait_for(proc.communicate(), timeout=5)
+        except (asyncio.TimeoutError, OSError):
+            self.notify("Failed to create review session", severity="error")
+            brief_file.unlink(missing_ok=True)
+            return
+        if proc.returncode != 0:
+            self.notify("Failed to create review session", severity="error")
+            brief_file.unlink(missing_ok=True)
+            return
+
+        await self._apply_ct_session_options(review_name)
+
+        switched = await self._switch_ct_session(review_name)
+        if not switched:
+            self.notify("Review started but could not switch to it", severity="warning")
+        else:
+            self.notify(f"Review session started: {review_name}", timeout=3)
+        self._do_scan()
+
+    async def _apply_ct_session_options(self, name: str) -> None:
         for opt_args in [("set", "-t", name, "status", "off"), ("set", "-t", name, "prefix", "C-@"),
                          ("set", "-g", "history-limit", "50000"), ("set", "-g", "mouse", "on")]:
             p = await asyncio.create_subprocess_exec(
@@ -444,11 +637,6 @@ class DashboardApp(App[None]):
                 stderr=asyncio.subprocess.PIPE,
             )
             await asyncio.wait_for(p.communicate(), timeout=2)
-        switched = await self._switch_ct_session(name)
-        self._pending_shell_names.discard(name)
-        if not switched:
-            self.notify("Shell created but could not switch to it", severity="warning")
-        self._do_scan()
 
     def _next_shell_name(self) -> str:
         existing = {s.tmux_session_name for s in self._sessions if s.is_shell}

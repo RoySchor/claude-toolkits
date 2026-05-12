@@ -36,6 +36,8 @@ class Session:
 
     @property
     def label(self) -> str:
+        if self.tmux_session_name and self.tmux_session_name.startswith("REVIEW-"):
+            return self.tmux_session_name
         if self.name:
             return self.name
         if self.is_shell and self.tmux_session_name:
@@ -45,6 +47,8 @@ class Session:
         if self.away_summary:
             first_line = self.away_summary.split("\n")[0]
             return first_line[:40]
+        if self.tmux_session_name:
+            return self.tmux_session_name
         if self.cwd:
             return Path(self.cwd).name
         return "(unnamed)"
