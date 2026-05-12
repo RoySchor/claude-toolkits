@@ -179,7 +179,6 @@ class SessionScanner:
 
         for sid, state_data in hook_states.items():
             if sid not in seen_ids:
-                last_event = state_data.get("last_event", "")
                 pid = state_data.get("pid")
                 alive = is_alive(pid) if pid else False
 
