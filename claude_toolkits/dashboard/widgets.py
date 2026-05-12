@@ -186,6 +186,7 @@ class DashFooter(Static):
             + key("enter", "Open")
             + key("n", "New Shell")
             + key("d", "Detail")
+            + key("R", "Review")
         )
         line2 = (
             key("ctrl+b h", "Exit Dashboard")
