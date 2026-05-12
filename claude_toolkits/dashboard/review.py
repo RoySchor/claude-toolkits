@@ -16,16 +16,23 @@ def find_transcript(session_id: str) -> Path | None:
     return None
 
 
+def _truncate(text: str, limit: int = 300) -> str:
+    if len(text) <= limit:
+        return text
+    truncated = text[:limit].rsplit(" ", 1)[0]
+    return truncated + "…"
+
+
 def extract_user_prompts(transcript_path: Path, max_prompts: int = 8) -> list[str]:
     prompts: list[str] = []
     try:
         with open(transcript_path) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
+            for raw_line in f:
+                stripped = raw_line.strip()
+                if not stripped:
                     continue
                 try:
-                    entry = json.loads(line)
+                    entry = json.loads(stripped)
                 except json.JSONDecodeError:
                     continue
                 if entry.get("type") == "user":
@@ -42,7 +49,7 @@ def extract_user_prompts(transcript_path: Path, max_prompts: int = 8) -> list[st
                     else:
                         content = str(msg)
                     if content.strip():
-                        prompts.append(content.strip()[:300])
+                        prompts.append(_truncate(content.strip()))
     except OSError:
         pass
     return prompts[-max_prompts:]

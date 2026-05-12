@@ -177,7 +177,13 @@ class ReviewChoiceModal(ModalScreen[str]):
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         value = event.value.strip()
-        self.dismiss(value if value else "local")
+        if not value:
+            self.dismiss("local")
+        elif value.startswith(("http://", "https://")):
+            self.dismiss(value)
+        else:
+            self.query_one("#pr-url-input", Input).value = ""
+            self.notify("Enter a valid URL (https://...) or press Enter for local", severity="warning")
 
     def action_cancel(self) -> None:
         self.dismiss("")
@@ -505,24 +511,7 @@ class DashboardApp(App[None]):
             self._pending_shell_names.discard(name)
             self.notify("Failed to create shell session", severity="error")
             return
-        for opt_args in [("set", "-t", name, "status", "off"), ("set", "-t", name, "prefix", "C-@"),
-                         ("set", "-g", "history-limit", "50000"), ("set", "-g", "mouse", "on")]:
-            p = await asyncio.create_subprocess_exec(
-                "tmux", "-L", "ct-sessions", *opt_args,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            await asyncio.wait_for(p.communicate(), timeout=2)
-        for bind_args in [
-            ("bind", "-T", "root", "WheelUpPane", "if-shell", "-Ft=", "#{pane_in_mode}", "send-keys -M", "copy-mode -et="),
-            ("bind", "-T", "root", "WheelDownPane", "send-keys", "-M"),
-        ]:
-            p = await asyncio.create_subprocess_exec(
-                "tmux", "-L", "ct-sessions", *bind_args,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            await asyncio.wait_for(p.communicate(), timeout=2)
+        await self._apply_ct_session_options(name)
         switched = await self._switch_ct_session(name)
         self._pending_shell_names.discard(name)
         if not switched:
@@ -545,7 +534,7 @@ class DashboardApp(App[None]):
         if not confirmed:
             return
         cwd = session.cwd or ""
-        pr_url = discover_pr(cwd) if cwd else None
+        pr_url = await asyncio.to_thread(discover_pr, cwd) if cwd else None
 
         if pr_url:
             await self._spawn_review(session, pr_url)
@@ -562,7 +551,8 @@ class DashboardApp(App[None]):
         await self._spawn_review(session, pr_url)
 
     async def _spawn_review(self, session: Session, pr_url: str | None) -> None:
-        review_name = f"REVIEW-{session.label}"
+        raw_name = f"REVIEW-{session.label}"
+        review_name = re.sub(r"[^a-zA-Z0-9_-]", "-", raw_name)
         cwd = session.cwd or str(Path.home())
 
         transcript_path = session.transcript_path or find_transcript(session.session_id)
@@ -597,14 +587,7 @@ class DashboardApp(App[None]):
             brief_file.unlink(missing_ok=True)
             return
 
-        for opt_args in [("set", "-t", review_name, "status", "off"),
-                         ("set", "-t", review_name, "prefix", "C-@")]:
-            p = await asyncio.create_subprocess_exec(
-                "tmux", "-L", "ct-sessions", *opt_args,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            await asyncio.wait_for(p.communicate(), timeout=2)
+        await self._apply_ct_session_options(review_name)
 
         switched = await self._switch_ct_session(review_name)
         if not switched:
@@ -612,6 +595,26 @@ class DashboardApp(App[None]):
         else:
             self.notify(f"Review session started: {review_name}", timeout=3)
         self._do_scan()
+
+    async def _apply_ct_session_options(self, name: str) -> None:
+        for opt_args in [("set", "-t", name, "status", "off"), ("set", "-t", name, "prefix", "C-@"),
+                         ("set", "-g", "history-limit", "50000"), ("set", "-g", "mouse", "on")]:
+            p = await asyncio.create_subprocess_exec(
+                "tmux", "-L", "ct-sessions", *opt_args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await asyncio.wait_for(p.communicate(), timeout=2)
+        for bind_args in [
+            ("bind", "-T", "root", "WheelUpPane", "if-shell", "-Ft=", "#{pane_in_mode}", "send-keys -M", "copy-mode -et="),
+            ("bind", "-T", "root", "WheelDownPane", "send-keys", "-M"),
+        ]:
+            p = await asyncio.create_subprocess_exec(
+                "tmux", "-L", "ct-sessions", *bind_args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await asyncio.wait_for(p.communicate(), timeout=2)
 
     def _next_shell_name(self) -> str:
         existing = {s.tmux_session_name for s in self._sessions if s.is_shell}
