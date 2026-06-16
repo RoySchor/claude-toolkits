@@ -131,9 +131,14 @@ WRAPPER_FUNCTION = r'''claude() {
         ((i++))
     done
 
+    # Mask tmux from Claude Code so it uses the standard scrolling renderer
+    # Preserve the outer terminal's TERM_PROGRAM so Claude detects capabilities correctly.
+    local outer_term_program="${TERM_PROGRAM:-xterm}"
+    local outer_term="${TERM%%-*}-256color"
+
     tmux -L ct-sessions new-session -d -s "$sess_name" \
         -x "$(tput cols)" -y "$(tput lines)" \
-        "$(printf '%q ' command claude "$@")"
+        "unset TMUX; unset TMUX_PANE; export TERM_PROGRAM=$outer_term_program; export TERM=$outer_term; $(printf '%q ' command claude "$@")"
     tmux -L ct-sessions set -t "$sess_name" status off
     tmux -L ct-sessions set -t "$sess_name" prefix C-@
     tmux -L ct-sessions set -g history-limit 50000
